@@ -125,4 +125,8 @@ export const sprintConfig: DocumentConfig<SprintData> = {
   systemPrompt: SPRINT_SYSTEM_PROMPT,
   componerDatos: componerDatosSprint,
   templatePath: path.join(__dirname, "template.html"),
+  pdf: {
+    width: "840px",
+    height: "1188px",
+  },
 };

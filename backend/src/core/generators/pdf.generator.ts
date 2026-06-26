@@ -45,18 +45,22 @@ export async function generarPdf<T>(
 ): Promise<Buffer> {
   const html = generarHtml(datos, config);
   const browser = await chromium.launch();
+  const width = config.pdf?.width ?? "1240px";
+  const height = config.pdf?.height ?? "1050px";
+  const viewportWidth = Number.parseInt(width, 10) || 1240;
+  const viewportHeight = Number.parseInt(height, 10) || 1050;
 
   try {
     const page = await browser.newPage({
-      viewport: { width: 1240, height: 1050 },
+      viewport: { width: viewportWidth, height: viewportHeight },
     });
     await page.setContent(html, { waitUntil: "networkidle" });
     await page.waitForTimeout(300);
 
     return page.pdf({
       printBackground: true,
-      width: "1240px",
-      height: "1050px",
+      width,
+      height,
       pageRanges: "1",
     });
   } finally {

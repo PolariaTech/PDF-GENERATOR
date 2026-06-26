@@ -58,7 +58,7 @@
               class="doc-tab rounded-lg px-4 py-2 text-sm font-semibold transition"
               data-doc-type="sprint"
             >
-              Sprint v2
+              Sprint
             </button>
           </div>
         </div>
@@ -186,11 +186,11 @@
           },
         },
         sprint: {
-          label: "Sprint v2",
-          title: "Generador de Resumen de Sprint v2",
+          label: "Sprint",
+          title: "Generador de Resumen de Sprint",
           description:
             "Sube el Markdown del sprint, revisa miembros, proyectos e issues, y descarga el PDF con el diseno v2.",
-          help: "Usa el esquema Sprint v2 agrupado por miembros, proyectos e issues.",
+          help: "Usa el esquema Sprint agrupado por miembros, proyectos e issues.",
           uploadTitle: "Subir documento del sprint",
           filePrefix: "Resumen_Sprint",
           nameFromData(data) {
@@ -216,7 +216,7 @@
       const previewFrame = document.getElementById("preview-frame");
       const tokenUsage = document.getElementById("token-usage");
 
-      function setDocumentType(docType) {
+      async function setDocumentType(docType) {
         selectedDocType = docType;
         const doc = DOCUMENTS[docType];
 
@@ -234,6 +234,7 @@
         });
 
         resetOutput();
+        await loadSamplePreview();
       }
 
       function resetOutput() {
@@ -271,6 +272,37 @@
 
       function endpoint(path) {
         return `${API}/api/${selectedDocType}/${path}`;
+      }
+
+      function setPreviewHtml(html) {
+        previewFrame.srcdoc = html;
+        stepPreview.classList.remove("hidden");
+
+        previewFrame.onload = () => {
+          try {
+            const doc = previewFrame.contentDocument;
+            const contentWidth = doc.body.scrollWidth || 1240;
+            const scale = previewFrame.clientWidth / contentWidth;
+            doc.body.style.transform = "scale(" + scale + ")";
+            doc.body.style.transformOrigin = "top left";
+            doc.body.style.width = contentWidth + "px";
+          } catch (e) {}
+        };
+      }
+
+      async function loadSamplePreview() {
+        try {
+          const res = await fetch(endpoint("sample-preview"));
+          const html = await res.text();
+          if (!res.ok) {
+            throw new Error("No se pudo cargar el ejemplo.");
+          }
+          setPreviewHtml(html);
+        } catch (err) {
+          previewFrame.srcdoc =
+            "<!doctype html><body style='font-family:sans-serif;padding:24px;color:#64748b'>No se pudo cargar la vista previa de ejemplo.</body>";
+          stepPreview.classList.remove("hidden");
+        }
       }
 
       function responseError(details, fallback) {
@@ -391,18 +423,7 @@
           }
         }
 
-        previewFrame.srcdoc = text;
-        stepPreview.classList.remove("hidden");
-
-        previewFrame.onload = () => {
-          try {
-            const doc = previewFrame.contentDocument;
-            const scale = previewFrame.clientWidth / 1240;
-            doc.body.style.transform = "scale(" + scale + ")";
-            doc.body.style.transformOrigin = "top left";
-            doc.body.style.width = "1240px";
-          } catch (e) {}
-        };
+        setPreviewHtml(text);
       }
 
       btnPreview.addEventListener("click", async () => {

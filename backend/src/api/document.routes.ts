@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { extraer } from "../core/ai/extractor.service";
 import { generarHtml, generarPdf } from "../core/generators/pdf.generator";
-import { getDocumentConfig } from "../documents/registry";
+import { getDocumentConfig, getDocumentSample } from "../documents/registry";
 
 export const documentRouter = Router();
 
@@ -17,6 +17,36 @@ function getConfigOrRespond(docType: string, res: any) {
 function getPayload(body: any) {
   return body?.datos ?? body;
 }
+
+documentRouter.get("/:docType/sample-preview", (req, res) => {
+  try {
+    const config = getConfigOrRespond(req.params.docType, res);
+    if (!config) {
+      return;
+    }
+
+    const sample = getDocumentSample(req.params.docType);
+    if (!sample) {
+      res.status(404).json({
+        error: `No hay datos de ejemplo para ${req.params.docType}.`,
+      });
+      return;
+    }
+
+    const parsed = config.schema.parse(sample);
+    const datos = config.componerDatos(parsed);
+    const html = generarHtml(datos, config);
+    res.type("html").send(html);
+  } catch (err: any) {
+    console.error(
+      `Error en /api/${req.params.docType}/sample-preview:`,
+      err.message,
+    );
+    res.status(500).json({
+      error: err.message || "Error al generar preview de ejemplo.",
+    });
+  }
+});
 
 documentRouter.post("/:docType/extraer", async (req, res) => {
   try {

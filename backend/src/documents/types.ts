@@ -6,4 +6,8 @@ export interface DocumentConfig<T> {
   systemPrompt: string;
   componerDatos(datosExtraidos: T): any;
   templatePath: string;
+  pdf?: {
+    width: string;
+    height: string;
+  };
 }
