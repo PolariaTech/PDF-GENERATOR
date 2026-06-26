@@ -239,7 +239,12 @@
 
       function resetOutput() {
         editor.value = "";
-        stepEdit.classList.add("hidden");
+        // Sprint always shows the edit panel (no AI extraction step needed)
+        if (selectedDocType === "sprint") {
+          stepEdit.classList.remove("hidden");
+        } else {
+          stepEdit.classList.add("hidden");
+        }
         stepPreview.classList.add("hidden");
         tokenUsage.classList.add("hidden");
         previewFrame.removeAttribute("srcdoc");
@@ -447,8 +452,9 @@
             body: JSON.stringify(data),
           });
 
-          if (!res.ok) {
-            const err = await res.json();
+          if (!res.ok || !res.headers.get("content-type")?.includes("application/pdf")) {
+            let err = {};
+            try { err = await res.json(); } catch (_) {}
             throw new Error(responseError(err, "Error al generar el PDF."));
           }
 

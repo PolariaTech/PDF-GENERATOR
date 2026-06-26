@@ -57,12 +57,13 @@ export async function generarPdf<T>(
     await page.setContent(html, { waitUntil: "networkidle" });
     await page.waitForTimeout(300);
 
-    return page.pdf({
+    const pdf = await page.pdf({
       printBackground: true,
       width,
       height,
       pageRanges: "1",
     });
+    return pdf;
   } finally {
     await browser.close();
   }
