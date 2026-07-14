@@ -14,8 +14,8 @@ import { PRECIO_GPT4OMINI } from "../../constants";
 // status. No hace falta pasar `shouldRetry` custom.
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
-  timeout: 30_000,
-  maxRetries: 2,
+  timeout: 60_000,
+  maxRetries: 1,
 });
 
 export interface UsoTokens {
