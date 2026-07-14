@@ -80,9 +80,9 @@ Los otros 3 endpoints (`GET /:docType/sample-preview`, `POST /:docType/extraer`,
 
 - Usa `openai.beta.chat.completions.parse` con `response_format: zodResponseFormat(config.schema, ...)` — esto fuerza a la API de OpenAI a devolver una respuesta que cumple el schema Zod del `docType`, no un JSON libre que después haya que validar a mano.
 - `messages` son dos: `system` = `config.systemPrompt` (el prompt específico del tipo de documento, definido en su `config.ts`), `user` = el markdown crudo subido.
-- Modelo y precio están centralizados en `backend/src/constants.ts` (`PRECIO_GPT4OMINI`) — el extractor no hardcodea ni el modelo ni el precio, solo los importa.
-- El cliente OpenAI se instancia con `timeout: 30_000` y `maxRetries: 2` para no colgar el handler Express indefinidamente si OpenAI no responde.
-- Devuelve `{ datos: parsed, uso: { modelo, tokensEntrada, tokensSalida, tokensTotal, costoEstimadoUsd } }` — el costo se calcula en el propio servicio a partir de `PRECIO_GPT4OMINI`.
+- Modelo y precio están centralizados en `backend/src/constants.ts` (`PRECIO_GPT5MINI`) — el extractor no hardcodea ni el modelo ni el precio, solo los importa.
+- El cliente OpenAI se instancia con `timeout: 60_000` y `maxRetries: 1` para no colgar el handler Express indefinidamente si OpenAI no responde.
+- Devuelve `{ datos: parsed, uso: { modelo, tokensEntrada, tokensSalida, tokensTotal, costoEstimadoUsd } }` — el costo se calcula en el propio servicio a partir de `PRECIO_GPT5MINI`.
 
 ## 4. Convenciones no obvias (léelas antes de tocar código)
 

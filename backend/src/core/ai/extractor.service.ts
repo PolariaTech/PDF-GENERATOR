@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { DocumentConfig } from "../../documents/types";
-import { PRECIO_GPT4OMINI } from "../../constants";
+import { PRECIO_GPT5MINI } from "../../constants";
 
 // timeout/maxRetries: evita que un request colgado bloquee el handler Express
 // indefinidamente (esto lo invoca tambien un workflow de n8n que necesita
@@ -36,7 +36,7 @@ export async function extraer<T>(
   config: DocumentConfig<T>,
 ): Promise<ResultadoExtraccion<T>> {
   const completion = await openai.beta.chat.completions.parse({
-    model: PRECIO_GPT4OMINI.modelo,
+    model: PRECIO_GPT5MINI.modelo,
     temperature: 0.2,
     response_format: zodResponseFormat(config.schema, `${config.id}_schema`),
     messages: [
@@ -56,13 +56,13 @@ export async function extraer<T>(
     completion.usage?.total_tokens ?? tokensEntrada + tokensSalida;
 
   const costoEstimadoUsd =
-    (tokensEntrada / 1_000_000) * PRECIO_GPT4OMINI.usdPorMillonEntrada +
-    (tokensSalida / 1_000_000) * PRECIO_GPT4OMINI.usdPorMillonSalida;
+    (tokensEntrada / 1_000_000) * PRECIO_GPT5MINI.usdPorMillonEntrada +
+    (tokensSalida / 1_000_000) * PRECIO_GPT5MINI.usdPorMillonSalida;
 
   return {
     datos: parsed,
     uso: {
-      modelo: PRECIO_GPT4OMINI.modelo,
+      modelo: PRECIO_GPT5MINI.modelo,
       tokensEntrada,
       tokensSalida,
       tokensTotal,

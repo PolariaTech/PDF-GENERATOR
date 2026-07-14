@@ -15,10 +15,12 @@ export interface DatosFijos {
 
 // Precio de OpenAI por millon de tokens (USD). Verificado en openai.com/api/pricing.
 // Si OpenAI cambia el precio o migras de modelo, se actualiza aqui, en un solo lugar.
-export const PRECIO_GPT4OMINI = {
-  modelo: "gpt-4o-mini",
-  usdPorMillonEntrada: 0.15,
-  usdPorMillonSalida: 0.6,
+// Entrada cacheada: $0.025/millon (no se usa en el calculo de costo actual, que no
+// distingue tokens cacheados; queda anotado por si se agrega esa granularidad despues).
+export const PRECIO_GPT5MINI = {
+  modelo: "gpt-5-mini",
+  usdPorMillonEntrada: 0.25,
+  usdPorMillonSalida: 2.0,
 };
 
 // Bloque de horas FIJO, en base MENSUAL (4 semanas). No se extrae del .md,

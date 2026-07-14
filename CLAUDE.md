@@ -54,7 +54,7 @@ Mismo set de 4 endpoints para cualquier `docType` registrado:
 
 ### Extracción con IA (`backend/src/core/ai/extractor.service.ts`)
 
-Usa `openai.beta.chat.completions.parse` con `zodResponseFormat(config.schema, ...)` para forzar que la respuesta cumpla el schema del documento. Modelo y precio por token están centralizados en `backend/src/constants.ts` (`PRECIO_GPT4OMINI`); cambios de modelo/precio van ahí, no en el extractor.
+Usa `openai.beta.chat.completions.parse` con `zodResponseFormat(config.schema, ...)` para forzar que la respuesta cumpla el schema del documento. Modelo y precio por token están centralizados en `backend/src/constants.ts` (`PRECIO_GPT5MINI`); cambios de modelo/precio van ahí, no en el extractor.
 
 ### Datos fijos (`backend/src/constants.ts`)
 

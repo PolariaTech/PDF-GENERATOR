@@ -15,7 +15,7 @@ flowchart TB
 
     sistema["Polaria PDF Generator<br/>——————————————<br/>Convierte un Markdown de épica/sprint<br/>en un PDF con diseño oficial:<br/>IA extrae y estructura, el usuario<br/>revisa/edita el JSON, Playwright<br/>renderiza el HTML final a PDF"]
 
-    openai[["OpenAI API<br/>(gpt-4o-mini)"]]
+    openai[["OpenAI API<br/>(gpt-5-mini)"]]
 
     equipo -- "HTTPS (navegador)<br/>sube .md, edita JSON, descarga PDF" --> sistema
     n8n -- "HTTP + JSON, header X-API-Key<br/>POST /api/sprint/pdf<br/>respuesta: PDF binario o JSON de error" --> sistema
@@ -49,7 +49,7 @@ flowchart TB
         chromium[("Proceso Chromium headless<br/>————————<br/>Playwright<br/>browser singleton (lazy)<br/>cola interna: MAX_CONCURRENT_RENDERS=4<br/>timeout de render: 15s")]
     end
 
-    openai[["OpenAI API<br/>(gpt-4o-mini)"]]
+    openai[["OpenAI API<br/>(gpt-5-mini)"]]
 
     actor_equipo -- "HTTP GET /<br/>descarga HTML/CSS/JS del sitio" --> frontend
     frontend -- "HTTP + JSON: GET /api/:docType/sample-preview,<br/>POST /api/:docType/preview<br/>HTTP + multipart/form-data (campo 'archivo'):<br/>POST /api/:docType/extraer<br/>HTTP binario (application/pdf):<br/>POST /api/:docType/pdf<br/>fetch() desde el navegador del equipo" --> backend
@@ -142,7 +142,7 @@ Agregar un tipo de documento nuevo no toca `document.routes.ts`: se crea `backen
 
 | Servicio | Para qué se usa | Dónde está configurado |
 |---|---|---|
-| **OpenAI API** (`gpt-4o-mini`) | Único servicio externo del sistema. Convierte el Markdown subido en el JSON estructurado de cada `docType`, vía `openai.beta.chat.completions.parse` con `response_format: zodResponseFormat(config.schema, ...)` — fuerza a la respuesta a cumplir el schema Zod exacto. `temperature: 0.2`, `timeout: 30_000ms`, `maxRetries: 2` (ver `backend/src/core/ai/extractor.service.ts`). | `backend/src/constants.ts` → `PRECIO_GPT4OMINI` (`modelo: "gpt-4o-mini"`, `usdPorMillonEntrada: 0.15`, `usdPorMillonSalida: 0.6`) y `backend/.env` → `OPENAI_API_KEY`. |
+| **OpenAI API** (`gpt-5-mini`) | Único servicio externo del sistema. Convierte el Markdown subido en el JSON estructurado de cada `docType`, vía `openai.beta.chat.completions.parse` con `response_format: zodResponseFormat(config.schema, ...)` — fuerza a la respuesta a cumplir el schema Zod exacto. `temperature: 0.2`, `timeout: 60_000ms`, `maxRetries: 1` (ver `backend/src/core/ai/extractor.service.ts`). | `backend/src/constants.ts` → `PRECIO_GPT5MINI` (`modelo: "gpt-5-mini"`, `usdPorMillonEntrada: 0.25`, `usdPorMillonSalida: 2.0`) y `backend/.env` → `OPENAI_API_KEY`. |
 
 **No hay base de datos.** El sistema no persiste documentos generados, historial de extracciones, ni sesiones — cada request es autocontenido (sube un `.md`, o manda un JSON ya editado, y recibe HTML o PDF en la misma respuesta). Los únicos datos "fijos" del dominio (`HORAS_FIJAS`, `PALETAS` en `constants.ts`, y `sample-data.ts` por documento) están hardcodeados en el código fuente, no en una tabla ni en un archivo de estado externo.
 
