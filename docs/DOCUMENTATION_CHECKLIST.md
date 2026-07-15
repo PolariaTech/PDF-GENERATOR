@@ -12,7 +12,7 @@ Estado real de los 20 puntos de `GUIA_DOCUMENTACION_EXTENDIDA.md` aplicados al p
 | 6 | CONTRIBUTING.md | Alta | ✅ Hecho | `CONTRIBUTING.md` |
 | 7 | Glosario de términos del negocio | Alta | ✅ Hecho | `docs/GLOSSARY.md` |
 | 8 | Flujos de negocio end-to-end | Alta | ✅ Hecho | `docs/BUSINESS_FLOWS.md` |
-| 9 | Architecture Decision Records (ADRs) | Media | ✅ Hecho (5 ADRs) | `docs/adr/0001` a `0005` |
+| 9 | Architecture Decision Records (ADRs) | Media | ✅ Hecho (7 ADRs) | `docs/adr/0001` a `0007` |
 | 10 | Documentación de testing | Media | ⚠️ Hecho como honestidad, no como suite | `docs/TESTING.md` — no hay framework automatizado; documenta el protocolo de verificación manual vigente |
 | 11 | Runbooks de operación y deployment | Media | ✅ Hecho | `docs/RUNBOOKS.md` |
 | 12 | Guía de onboarding para nuevos desarrolladores | Media | ✅ Hecho | `docs/ONBOARDING.md` |

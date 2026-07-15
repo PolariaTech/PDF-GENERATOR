@@ -4,7 +4,7 @@
 2026-07-13 (cambio presente en el árbol de trabajo actual de `backend/src/core/generators/pdf.generator.ts`, aún no commiteado — verificado con `git diff HEAD -- backend/src/core/generators/pdf.generator.ts`; mismo cambio que introduce el browser singleton de ADR-0003). El diseño anterior (alto fijo, tomado literalmente de `template.pdf.height`) estuvo vigente desde el commit `6e3a34c` (2026-06-25).
 
 ## Estado
-Aceptado
+Aceptado, parcialmente superseded por [ADR-0007](0007-altura-de-pdf-tambien-se-achica-no-solo-crece.md) (2026-07-15): la decisión de medir el alto real y ajustar la página sigue vigente, pero el mecanismo de medición (`document.documentElement.scrollHeight`) y la regla de "nunca se achica por debajo del mínimo" (Opción 2 de este ADR) se reemplazaron — ver ADR-0007 para el detalle y el porqué.
 
 ## Contexto
 

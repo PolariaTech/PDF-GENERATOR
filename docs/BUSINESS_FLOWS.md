@@ -12,7 +12,7 @@
 |---|---|---|---|
 | 1 | Generación manual de un PDF desde el frontend | Principal | Construido |
 | 2 | Selección de tipo de documento y plantilla | Configuración | Construido |
-| 3 | Generación automática de PDF de sprint desde Linear (n8n) | Automatización | Diseño (Fase 0) — no construido |
+| 3 | Generación automática de PDF de sprint desde Linear (n8n) | Automatización | Construido (extracción determinística) — pilot real corrido con éxito (2026-07-15) |
 | 4 | Casos borde compartidos entre el flujo manual y el plan de n8n | Casos borde | Aplican hoy, algunos sin mitigación |
 
 ---
@@ -71,7 +71,7 @@ Estado inicial → estado final: **Un archivo `.md` con el contenido de una épi
 | 2-3 | No llega ningún archivo en el campo `archivo` | Mensaje genérico de error (ver nota de mensajes abajo) | Backend responde `400 BAD_REQUEST` ("No se recibio ningun archivo .md.") |
 | 3 | El archivo llega vacío (`markdown.trim()` vacío) | Mensaje genérico de error | Backend responde `400 BAD_REQUEST` ("El archivo esta vacio.") |
 | 4 | OpenAI no devuelve un JSON parseable contra el schema, la API key es inválida, o hay un problema de red con OpenAI | Mensaje genérico de error | Backend captura la excepción, hace `console.error` con el `docType` y el detalle real, y responde `500 INTERNAL_ERROR` ("Error al extraer datos.") — el detalle nunca llega al navegador |
-| 4 | OpenAI tarda más de 30s o falla de forma transitoria (429/5xx) | Igual que arriba, pero después de hasta 2 reintentos automáticos del SDK de OpenAI (`maxRetries: 2`, `timeout: 30_000` en `extractor.service.ts`) | Mismo camino: 500 tras agotar los reintentos |
+| 4 | OpenAI tarda más de 60s o falla de forma transitoria (429/5xx) | Igual que arriba, pero después de hasta 1 reintento automático del SDK de OpenAI (`maxRetries: 1`, `timeout: 60_000` en `extractor.service.ts`) | Mismo camino: 500 tras agotar los reintentos |
 | 8-9 (preview) / 11-12 (pdf) | El JSON editado a mano no cumple el schema (falta un campo requerido, un array vacío donde se exige al menos 1 elemento, un tipo de dato incorrecto) | Mensaje genérico de error (ver nota abajo) | Backend responde `400 VALIDATION_ERROR` con el detalle exacto de qué campo falló (`zodError.flatten()`) en el campo `details` de la respuesta — pero el frontend actual no muestra ese detalle (ver nota) |
 | 7 (antes de enviar) | El usuario rompe la sintaxis del JSON en el editor (llave sin cerrar, coma de más) | "JSON invalido: `<mensaje de JSON.parse>`" | Se detecta 100% en el navegador (`JSON.parse`), nunca llega al backend |
 | 12 | El render tarda más de 15 segundos (`RENDER_TIMEOUT_MS` en `pdf.generator.ts`) — típico en `sprint`/`detail` con muchos issues, o si las fuentes externas (Google Fonts, Tabler Icons) tardan en cargar | Mensaje genérico de error | Backend responde `500 INTERNAL_ERROR` ("Error al generar PDF.") |
@@ -143,7 +143,7 @@ Estado inicial → estado final: **Ningún tipo de documento fijado (la página 
 | Tipo | Qué documentar |
 |---|---|
 | Variante del flujo principal | `epica` tiene una sola plantilla (`default`, sin selector visible); `sprint` tiene cuatro (`detail` default, `resumen-inicio`, `resumen`, `resumen-v2`) — el selector de plantillas solo aparece si `DOCUMENTS[docType].templates` existe. |
-| Combinación con otro flujo | Cada plantilla de `sprint` tiene su propio tamaño de página fijo (`detail` 900×1188px, las otras tres 1240×1050px) y su propio alto mínimo — el alto real crece automáticamente si el contenido no entra (ver `pdf.generator.ts`), pero el ancho es fijo por plantilla y no configurable desde la UI. |
+| Combinación con otro flujo | Cada plantilla de `sprint` tiene su propio tamaño de página de referencia (`detail` 900×1188px, las otras tres 1240×1050px) — el alto real ya no respeta ese valor como mínimo: crece si el contenido no entra y se achica si sobra espacio, según el contenido real (ver `pdf.generator.ts` y `docs/adr/0007-altura-de-pdf-tambien-se-achica-no-solo-crece.md`); el ancho sí es fijo por plantilla y no configurable desde la UI. |
 
 ### Reglas de negocio que aplican
 - `plantilla` es opcional en todos los endpoints; si falta o no coincide con ninguna clave registrada, el sistema usa siempre `config.defaultTemplate` del tipo de documento — nunca falla por una plantilla desconocida.
@@ -152,55 +152,68 @@ Estado inicial → estado final: **Ningún tipo de documento fijado (la página 
 
 ---
 
-## Flujo 3 — Generación automática de PDF de sprint desde Linear (n8n) — *planeado, no construido*
+## Flujo 3 — Generación automática de PDF de sprint desde Linear (n8n)
 
 ### Nombre del flujo
-Generación automática de punta a punta de un PDF de Sprint desde un ciclo de Linear, sin edición manual del JSON, mediante un workflow de n8n ("Sprint PDF Generator").
+Generación automática de punta a punta de un PDF de Sprint desde un ciclo de Linear, sin edición manual del JSON, mediante un workflow de n8n.
 
 ### Estado actual
-**Diseño — Fase 0 (Decisiones confirmadas), no construido.** El plan completo, nodo por nodo, vive en `PLAN-N8N-SPRINT-WORKFLOW.md`; los hallazgos de la auditoría independiente (Automation Governance Architect + Workflow Architect + MCP Builder) que motivaron la versión actual del plan viven en `AUDITORIA-PLAN-N8N-SPRINT-WORKFLOW.md`. Este documento **no repite** ese detalle técnico — solo resume el objetivo de negocio y remite a esos dos archivos para la implementación.
+**Construido y con pilot real corrido con éxito (2026-07-15).** El plan original (AI Agent multi-turno con 3 tools sobre Linear) vive en `PLAN-N8N-SPRINT-WORKFLOW.md` y su auditoría en `AUDITORIA-PLAN-N8N-SPRINT-WORKFLOW.md` — ambos documentos quedan como registro histórico del diseño inicial. Durante la construcción real se cambió esa pieza central por extracción determinística (ver `docs/adr/0006-extraccion-deterministica-en-vez-de-ai-agent-para-sync-de-linear.md`): el AI Agent fallaba de forma dura (crash de ejecución) cuando el parser estructurado no podía interpretar su salida, y los campos que alimentan KPIs de liderazgo (`agregado`, `type`, `priority`, `status`) no tenían por qué depender de un LLM cuando son aritmética/comparación de fechas pura.
+
+**Cambios posteriores al pilot inicial** (detalle completo en ADR-0006 y ADR-0007):
+- El nodo que validaba los rangos de caracteres del texto narrativo y reintentaba `/extraer` una vez ante un fallo fue **eliminado** del workflow. Hoy no hay reintento ni validación de rangos en n8n — el paso `Consolidar Payload Final del Sprint` sigue pisando los campos calculables de forma determinística, pero ya no valida el texto que redacta el LLM.
+- El nombre del PDF subido a Drive ahora depende de la plantilla (`RESUMEN_INICIO_SPRINT_<N>_<MES-MES_AÑO>.PDF`, `RESUMEN_FINAL_...`, `DETAIL_...`, todo en mayúsculas), con autoincremento (`_1`, `_2`, ...) si ya existe un archivo con ese nombre en la subcarpeta del sprint — antes el nombre incluía un timestamp y no distinguía por plantilla.
+- La fila de la Sheet se marca como procesada matcheando por `Ciclo (nombre en Linear)` + `weekNumber`, no por el número de fila (`row_number`) — matchear por posición de fila resultaba en 0 filas actualizadas en la práctica.
+- El alto del PDF generado ahora también se achica cuando el contenido real es menor al alto de diseño de la plantilla, no solo crece (ver ADR-0007) — afecta a los 4 tipos de plantilla de `sprint`, no solo a la generación vía n8n.
+
+Hoy conviven dos workflows en n8n:
+- **`Sprint - Generar Resumen PDF con Extracción Determinística - Google Drive`** (id `rqkqaSiaFq0eK7lU`) — arquitectura vigente, descrita abajo. Con las 6 credenciales de sus nodos HTTP Request (3× `Linear Auth`, 3× `PDF Generator API`) asignadas manualmente por el operador desde la UI de n8n (2026-07-14), y pilot real corrido con éxito (2026-07-15).
+- **`Sprint - Generar Resumen PDF - Google Drive`** (id `G8Fq2jaofpNAYCM9`, AI Agent) — arquitectura original, no archivada todavía. Pendiente decidir si se archiva ahora que el workflow determinístico ya corrió sin problemas (ver ADR-0006, notas de seguimiento).
 
 ### Objetivo del flujo
 Estado inicial → estado final: **Un ciclo (sprint) cerrado o en curso en Linear, con una fila pendiente en la Google Sheet "Preguntas Skill"** → **un PDF de sprint generado y subido a Google Drive, con la fila marcada como procesada**, sin que nadie tenga que copiar datos de Linear a un Markdown ni editar el JSON a mano.
 
-### Actores involucrados (según el plan)
+### Actores involucrados
 | Actor | Rol en este flujo |
 |---|---|
 | Operador | Dispara el trigger manual en n8n (no hay trigger automático todavía) |
-| n8n (orquestador) | Lee la Google Sheet, valida la fila, calcula las horas, llama al AI Agent, valida su salida, llama al backend y sube el resultado a Drive |
-| AI Agent (LLM + 3 tools sobre Linear) | Busca el ciclo, lista sus issues y su historial, y arma el JSON del sprint respetando los mismos rangos de caracteres que hoy exige `SPRINT_SYSTEM_PROMPT` en `backend/src/documents/sprint/config.ts` |
-| Linear (API GraphQL) | Fuente de verdad de los issues, ciclos y su historial |
-| Backend (mismo `POST /api/sprint/pdf` que usa el frontend manual) | Valida y genera el PDF — **no hay un backend paralelo para automatización**, es el mismo endpoint del Flujo 1 |
+| n8n (orquestador) | Lee la Google Sheet, valida la fila, calcula las horas, consulta Linear con HTTP Request nodos planos, clasifica cada issue de forma determinística, consolida un Markdown, llama a `POST /api/sprint/extraer` y a `POST /api/sprint/pdf`, y sube el resultado a Drive |
+| Linear (API GraphQL) | Fuente de verdad de los ciclos, issues y su historial — consultada con 3 llamadas HTTP directas (`Buscar Ciclo en Linear`, `Listar Issues del Ciclo`, `Obtener Historial de Issue` una vez por issue), sin ningún LLM de por medio |
+| Backend — extracción (`POST /api/sprint/extraer`) | El mismo endpoint que usa el flujo manual (Flujo 1) para convertir Markdown en JSON estructurado vía OpenAI — aquí recibe el Markdown que n8n consolidó a partir de Linear, no uno escrito por una persona. Es el único punto del flujo que usa un LLM, acotado al texto narrativo (`objetivo`, `equipo`, `riesgoTransversal`, `desviaciones`) |
+| Backend — PDF (mismo `POST /api/sprint/pdf` que usa el frontend manual) | Valida y genera el PDF — **no hay un backend paralelo para automatización**, es el mismo endpoint del Flujo 1 |
 | Google Sheets ("Preguntas Skill") | Guarda la configuración de cada corrida (ciclo, festivos, horas, plantilla) y el resultado (link de Drive, timestamp, `Procesado`) |
 | Google Drive | Destino final del PDF |
 
 ### Resumen del flujo en términos de negocio
 1. Un operador dispara manualmente el workflow en n8n.
 2. n8n toma la última fila pendiente (no procesada) de la Sheet de configuración de sprints.
-3. n8n valida que esa fila tenga datos completos y coherentes (fechas, plantilla válida, etc.) antes de gastar ninguna llamada a Linear o al LLM.
-4. n8n calcula de forma determinística (sin usar el LLM) las horas del equipo para ese sprint.
-5. Un AI Agent consulta Linear — busca el ciclo correspondiente, lista todos sus issues y revisa el historial de cada uno para saber si fue planeado o agregado durante el sprint — y arma el JSON completo del sprint.
-6. n8n valida ese JSON contra los rangos de caracteres reales que exige el sistema hoy; si algo se sale de rango, le devuelve el error al agente para un único reintento; si vuelve a fallar, notifica al equipo y detiene el proceso ahí, sin generar nada.
-7. n8n llama al mismo endpoint que usa el frontend manual (`POST /api/sprint/pdf`), autenticado con una API key propia del backend.
-8. n8n confirma que la respuesta sea realmente un PDF (y no un JSON de error) antes de subir nada a Drive.
-9. n8n sube el PDF a Google Drive y marca la fila de origen como procesada, con el link del archivo y la fecha.
+3. n8n valida que esa fila tenga datos completos y coherentes (fechas, plantilla válida, etc.) antes de gastar ninguna llamada a Linear o al backend.
+4. n8n calcula de forma determinística (sin LLM) las horas del equipo para ese sprint y el corte de fecha que separa "planeado" de "agregado".
+5. n8n busca el ciclo en Linear por nombre exacto, lista todos sus issues, y para cada uno consulta su historial de cambios de ciclo — todo con llamadas HTTP directas, sin agente ni tool-calling.
+6. n8n clasifica cada issue de forma determinística (`agregado`, `type`, `priority`, `status` — comparación de fechas y mapeo de valores, sin LLM) y consolida todo en un único Markdown estructurado, junto con `porcentajeCompletado`/`estadoSprint` ya calculados.
+7. n8n envía ese Markdown a `POST /api/sprint/extraer` (el mismo endpoint que usa el flujo manual) para que redacte el texto narrativo (`objetivo` por miembro, `equipo`, `riesgoTransversal`, `desviaciones`) respetando los rangos de caracteres del prompt.
+8. n8n **pisa** en la respuesta del LLM los campos ya calculados de forma determinística (`sprintName` sin la palabra "SPRINT" — las plantillas HTML ya la traen escrita, para que no quede duplicada —, fechas, `weekNumber`, `estadoSprint`, `porcentajeCompletado`, `horas`, `plantilla`) para que nunca dependan de lo que el LLM haya podido inferir. **No hay validación de rangos de caracteres ni reintento** (existieron hasta el pilot inicial; se eliminaron después — ver ADR-0006): si el texto narrativo queda fuera del rango que pide `SPRINT_SYSTEM_PROMPT`, el PDF se genera igual.
+9. n8n llama al mismo endpoint que usa el frontend manual (`POST /api/sprint/pdf`), autenticado con una API key propia del backend.
+10. n8n confirma que la respuesta sea realmente un PDF (y no un JSON de error) antes de subir nada a Drive.
+11. n8n calcula el nombre del archivo según la plantilla (`RESUMEN_INICIO_...`, `RESUMEN_FINAL_...`, `DETAIL_...`, ver Postcondiciones), revisa si ya existe un archivo con ese nombre en la subcarpeta del sprint y le agrega un sufijo autoincremental (`_1`, `_2`, ...) si hace falta, antes de subirlo a Google Drive.
+12. n8n marca la fila de origen como procesada (matcheando por `Ciclo (nombre en Linear)` + `weekNumber`, no por posición de fila), con el link del archivo y la fecha.
 
-### Postcondiciones (una vez construido)
-- La fila de la Sheet queda marcada `Procesado = TRUE`, con el link de Drive y un timestamp.
-- El PDF queda disponible en una carpeta de Drive (carpeta todavía sin definir en el plan).
-- Queda un registro de auditoría de la corrida (workflow, versión, sprint, éxito/fallo).
+### Postcondiciones
+- La fila de la Sheet queda marcada `Procesado = TRUE`, con el link de Drive y un timestamp — la fila se identifica por `Ciclo (nombre en Linear)` + `weekNumber`, no por su número de fila.
+- El PDF queda disponible en la carpeta de Drive `Sprint PDFs`, en una subcarpeta por sprint (buscada por nombre exacto; creada si no existe), con un nombre determinístico según la plantilla usada: `RESUMEN_INICIO_SPRINT_<N>_<MES-MES_AÑO>.PDF` (`resumen-inicio`), `RESUMEN_FINAL_SPRINT_<N>_<MES-MES_AÑO>.PDF` (`resumen`/`resumen-v2`) o `DETAIL_SPRINT_<N>_<MES-MES_AÑO>.PDF` (`detail`), todo en mayúsculas; si ya existe un archivo con ese nombre, se le agrega `_1`, `_2`, etc.
+- Queda un registro de auditoría de la corrida (workflow, timestamp, `sprintName`, éxito/fallo) en el Data Table de n8n `sprint_pdf_execution_log`.
 
 ### Casos de error y decisiones pendientes
-No se repiten aquí en detalle — están completos en `PLAN-N8N-SPRINT-WORKFLOW.md` (sección "Riesgos a tener en cuenta" y "Próximos pasos") y en `AUDITORIA-PLAN-N8N-SPRINT-WORKFLOW.md` (tabla de hallazgos por severidad). En resumen, antes de construir el primer nodo falta:
-- Implementar la autenticación por API key en el backend (hoy no existe — el middleware `apiKeyAuth` en `document.routes.ts` ya está preparado para activarse con una variable de entorno `API_KEY`, pero requiere que esa variable exista y que el router la use).
-- Resolver una URL pública para el backend (deploy o túnel), ya que n8n corre en la nube y no alcanza `localhost:3001`.
-- Decidir si el AI Agent multi-turno con tools se mantiene o se reemplaza por extracción determinística de un solo turno (mismo patrón que `extractor.service.ts`).
-- Decidir si se mantiene algún gate de confirmación humana antes de considerar un PDF automático como definitivo para liderazgo.
+No se repiten aquí en detalle. El diseño original y su auditoría (con hallazgos ya resueltos en la construcción real, como la rama IF que distingue un PDF válido de un JSON de error antes de subir a Drive) viven en `PLAN-N8N-SPRINT-WORKFLOW.md` y `AUDITORIA-PLAN-N8N-SPRINT-WORKFLOW.md`; el cambio de arquitectura (AI Agent → extracción determinística) y sus consecuencias viven en `docs/adr/0006-extraccion-deterministica-en-vez-de-ai-agent-para-sync-de-linear.md`. Pendiente:
+- Decidir si se archiva el workflow anterior basado en AI Agent, ahora que el pilot real del workflow determinístico ya corrió con éxito (2026-07-15).
+- Decidir si se mantiene algún gate de confirmación humana antes de considerar un PDF automático como definitivo para liderazgo (mismo punto abierto que ya señalaba el plan original) — más relevante todavía ahora que no hay validación de rangos de caracteres antes de generar el PDF (ver punto siguiente).
+- Evaluar si conviene reintroducir alguna validación mínima del texto narrativo (sin necesariamente el reintento automático que existía antes de eliminarse) — ver ADR-0006.
 
 ### Reglas de negocio que aplican
-- El JSON que produce el AI Agent debe cumplir exactamente el mismo `SprintSchema` que valida hoy el flujo manual — no hay un schema paralelo para automatización.
-- La única fuente de verdad para los rangos de caracteres del prompt es `SPRINT_SYSTEM_PROMPT` en `backend/src/documents/sprint/config.ts`, nunca el `SKILL.md` de la skill de Linear (que quedó desactualizado respecto al schema real).
-- El endpoint que llama n8n es el mismo que usa el frontend manual: cualquier cambio de contrato en `POST /api/sprint/pdf` afecta ambos flujos a la vez.
+- El JSON final debe cumplir exactamente el mismo `SprintSchema` que valida hoy el flujo manual — no hay un schema paralelo para automatización.
+- La única fuente de verdad para los rangos de caracteres del prompt es `SPRINT_SYSTEM_PROMPT` en `backend/src/documents/sprint/config.ts`, nunca el `SKILL.md` de la skill de Linear (que quedó desactualizado respecto al schema real) ni ninguna copia hardcodeada en n8n que no se actualice junto con `config.ts`. Hoy nada en n8n valida que el LLM efectivamente haya respetado esos rangos (ver Casos de error y decisiones pendientes).
+- Los campos que se pueden calcular de forma determinística (fechas, horas, `agregado`, `type`, `priority`, `status`, `estadoSprint`, `porcentajeCompletado`, `plantilla`) nunca se dejan en manos del LLM, aunque el endpoint de extracción los devuelva — n8n los pisa siempre con el valor calculado.
+- El endpoint que llama n8n (`/api/sprint/extraer` y `/api/sprint/pdf`) es el mismo que usa el frontend manual: cualquier cambio de contrato en cualquiera de los dos afecta ambos flujos a la vez.
 
 ---
 
@@ -214,7 +227,7 @@ Estos dos casos fueron identificados durante la auditoría del plan de n8n (`AUD
 
 **Por qué esto aplica igual al flujo manual (Flujo 1):** el schema que valida `POST /preview` y `POST /pdf` es el mismo, sin importar si el JSON lo escribió la IA o lo editó una persona a mano en el textarea del frontend. Hoy, un usuario puede escribir un `objetivo` de 10 caracteres para un miembro del sprint, y tanto el preview como el PDF se generan sin ningún error — el `safeParse` pasa porque 10 caracteres está por debajo del máximo de 600. El resultado es una tarjeta visualmente desbalanceada (mucho más corta que las demás) sin que el sistema avise nada; es un problema de diseño/homogeneidad visual, no de datos inválidos según el schema actual.
 
-**Qué hace el sistema hoy:** nada — ni el flujo manual ni (todavía) el de n8n tienen una validación real de los mínimos. El plan de n8n propone agregar esa validación en un nodo intermedio antes de llamar al backend (hardcodeada contra los números reales de `config.ts`, con reintento único si falla). Esa misma validación, si se implementara como un `.min()` en `SprintSchema`, protegería ambos flujos a la vez sin duplicar lógica.
+**Qué hace el sistema hoy:** nada, en ninguno de los dos flujos. El workflow de n8n sí llegó a tener esa validación implementada (un nodo intermedio antes de llamar al backend, hardcodeado contra los números reales de `config.ts`, con reintento único si fallaba) — se construyó, se probó, y funcionó durante el pilot inicial. Después del pilot se eliminó deliberadamente (ver `docs/adr/0006-extraccion-deterministica-en-vez-de-ai-agent-para-sync-de-linear.md`, sección Estado), así que hoy este caso borde vuelve a aplicar sin ninguna mitigación en ningún flujo. Esa misma validación, si se implementara como un `.min()` en `SprintSchema`, protegería ambos flujos a la vez sin duplicar lógica ni depender de un nodo de n8n que puede volver a eliminarse.
 
 ### Caso borde B — El render supera el timeout de 15 segundos del backend
 
@@ -231,8 +244,10 @@ Estos dos casos fueron identificados durante la auditoría del plan de n8n (`AUD
 ---
 
 ## Referencias
-- Plan técnico completo de la automatización: `PLAN-N8N-SPRINT-WORKFLOW.md`
-- Auditoría del plan (hallazgos por severidad + plan de acción priorizado): `AUDITORIA-PLAN-N8N-SPRINT-WORKFLOW.md`
+- Plan técnico original de la automatización (AI Agent, registro histórico): `PLAN-N8N-SPRINT-WORKFLOW.md`
+- Auditoría del plan original (hallazgos por severidad + plan de acción priorizado): `AUDITORIA-PLAN-N8N-SPRINT-WORKFLOW.md`
+- Decisión de arquitectura vigente (extracción determinística en vez de AI Agent): `docs/adr/0006-extraccion-deterministica-en-vez-de-ai-agent-para-sync-de-linear.md`
+- Mecanismo de alto auto-ajustable del PDF (crece y se achica según el contenido real): `docs/adr/0007-altura-de-pdf-tambien-se-achica-no-solo-crece.md`
 - Contrato de datos de cada tipo de documento: `backend/src/documents/epica/config.ts`, `backend/src/documents/sprint/config.ts`
 - Rutas y forma de los errores de la API: `backend/src/api/document.routes.ts`
 - Motor de render y sus límites (timeout, concurrencia, alto auto-ajustable): `backend/src/core/generators/pdf.generator.ts`

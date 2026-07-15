@@ -38,14 +38,14 @@ Cada entrada indica: definición de negocio en lenguaje simple, cómo se llama e
 
 **Definición de negocio**: la forma visual en la que se presenta un mismo tipo de documento. Un tipo de documento (por ejemplo Sprint) puede tener más de una plantilla porque el mismo contenido extraído se necesita mostrar de formas distintas según el momento del proceso: una lista detallada de issues, o una vista resumida de tarjetas por persona.
 
-**Representación en el sistema**: cada entrada del objeto `templates: Record<string, DocumentTemplate>` de un `DocumentConfig<T>` (`backend/src/documents/types.ts`). Cada `DocumentTemplate` define `path` (el archivo `.html` de Handlebars) y opcionalmente `pdf.width`/`pdf.height` (tamaño de página; el alto es solo el mínimo, `generarPdf()` lo agranda si el contenido no entra). Se elige con el parámetro `plantilla` (query en `sample-preview`, body en `preview`/`pdf`); si no se manda o no existe, se usa `config.defaultTemplate`. Épica tiene una sola plantilla (`default`); Sprint (`backend/src/documents/sprint/config.ts`) tiene 4:
+**Representación en el sistema**: cada entrada del objeto `templates: Record<string, DocumentTemplate>` de un `DocumentConfig<T>` (`backend/src/documents/types.ts`). Cada `DocumentTemplate` define `path` (el archivo `.html` de Handlebars) y opcionalmente `pdf.width`/`pdf.height` (tamaño de página; el alto es solo una referencia de diseño — `generarPdf()` crece o achica la página según el alto real del contenido, ver `docs/adr/0007-altura-de-pdf-tambien-se-achica-no-solo-crece.md`). Se elige con el parámetro `plantilla` (query en `sample-preview`, body en `preview`/`pdf`); si no se manda o no existe, se usa `config.defaultTemplate`. Épica tiene una sola plantilla (`default`); Sprint (`backend/src/documents/sprint/config.ts`) tiene 4:
 
-| Clave | Archivo | Cuándo se usa | Tamaño de PDF |
+| Clave | Archivo | Cuándo se usa | Tamaño de PDF (referencia) |
 |---|---|---|---|
-| `detail` (default de Sprint) | `template-detail.html` | Lista completa de issues por miembro y proyecto, con etiquetas de tipo/prioridad/estado/agregado por issue. | 900×1188px (mínimo) |
-| `resumen-inicio` | `template-resumen-inicio.html` | Tarjetas por miembro al arrancar el sprint — sin comparar planeados vs. agregados porque el sprint todavía no cerró. | 1240×1050px (mínimo) |
-| `resumen` | `template-resumen.html` | Igual que `resumen-inicio`, pero al cierre del sprint, con el donut de planeados vs. agregados. | 1240×1050px (mínimo) |
-| `resumen-v2` | `template-resumen-v2.html` | Resumen de cierre con dos KPIs de cumplimiento separados (issues planeados vs. agregados) más un KPI global de planeación, en vez del riesgo transversal muestra `desviaciones`. | 1240×1050px (mínimo) |
+| `detail` (default de Sprint) | `template-detail.html` | Lista completa de issues por miembro y proyecto, con etiquetas de tipo/prioridad/estado/agregado por issue. | 900×1188px |
+| `resumen-inicio` | `template-resumen-inicio.html` | Tarjetas por miembro al arrancar el sprint — sin comparar planeados vs. agregados porque el sprint todavía no cerró. | 1240×1050px |
+| `resumen` | `template-resumen.html` | Igual que `resumen-inicio`, pero al cierre del sprint, con el donut de planeados vs. agregados. | 1240×1050px |
+| `resumen-v2` | `template-resumen-v2.html` | Resumen de cierre con dos KPIs de cumplimiento separados (issues planeados vs. agregados) más un KPI global de planeación, en vez del riesgo transversal muestra `desviaciones`. | 1240×1050px |
 
 **Términos relacionados**: `epica`, `sprint`, `componerDatos`.
 
