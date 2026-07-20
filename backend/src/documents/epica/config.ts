@@ -101,10 +101,44 @@ function asegurarAnioEnPeriodo(periodo: string, fechaInicio: string, fechaFin: s
   return `${periodo} ${anio}`;
 }
 
+const MESES_ABREV = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
+
+function parsearFechaCorta(fecha: string, anio: number): Date | null {
+  const [diaStr, mesAbrev] = fecha.trim().toUpperCase().split(/\s+/);
+  const mes = MESES_ABREV.indexOf(mesAbrev);
+  const dia = parseInt(diaStr, 10);
+  if (mes === -1 || Number.isNaN(dia)) return null;
+  return new Date(anio, mes, dia);
+}
+
+function formatearFechaCorta(fecha: Date): string {
+  return `${fecha.getDate()} ${MESES_ABREV[fecha.getMonth()]}`;
+}
+
+// La IA a veces calcula "fechaFin" sumando un mes calendario en vez de la
+// duracion real del ciclo (probado 2026-07-20: "20 JUL" + "4 SEMANAS" dio
+// "20 AGO" -- un mes calendario -- en vez de "17 AGO", que es lo correcto a
+// 28 dias exactos). Se recalcula en codigo a partir de fechaInicio + la
+// cantidad de semanas que diga "duracion", en vez de confiar en la aritmetica
+// de fechas de la IA. Si duracion o fechaInicio no tienen el formato
+// esperado, se deja el fechaFin que devolvio la IA sin tocar.
+function corregirFechaFin(fechaInicio: string, fechaFin: string, duracion: string, anio: number): string {
+  const inicio = parsearFechaCorta(fechaInicio, anio);
+  const semanas = duracion.match(/(\d+)\s*SEMANA/i);
+  if (!inicio || !semanas) return fechaFin;
+  const fin = new Date(inicio);
+  fin.setDate(fin.getDate() + parseInt(semanas[1], 10) * 7);
+  return formatearFechaCorta(fin);
+}
+
 export function componerDatosEpica(datosExtraidos: EpicaData) {
+  const periodo = asegurarAnioEnPeriodo(datosExtraidos.periodo, datosExtraidos.fechaInicio, datosExtraidos.fechaFin);
+  const anio = parseInt(periodo.match(/\d{4}/)![0], 10);
+
   return {
     ...datosExtraidos,
-    periodo: asegurarAnioEnPeriodo(datosExtraidos.periodo, datosExtraidos.fechaInicio, datosExtraidos.fechaFin),
+    periodo,
+    fechaFin: corregirFechaFin(datosExtraidos.fechaInicio, datosExtraidos.fechaFin, datosExtraidos.duracion, anio),
     epicas: datosExtraidos.epicas.map((epica, indice) => ({
       ...epica,
       ...asignarPaleta(indice),
