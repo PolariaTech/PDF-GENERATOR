@@ -39,7 +39,7 @@ export const EPICA_SYSTEM_PROMPT = `Eres un extractor de datos. Recibes el conte
 El JSON debe tener esta estructura exacta:
 
 {
-  "periodo": "string. Ej: JUNIO-JULIO. En mayusculas.",
+  "periodo": "string. OBLIGATORIO terminar en un año de 4 digitos, sin excepcion, incluso si el documento fuente no lo menciona explicitamente (en ese caso infierelo del contexto: fechas del documento, año actual, u otras referencias). Ej: JUNIO-JULIO 2026. En mayusculas. NUNCA devuelvas 'periodo' sin año: es un campo usado por integraciones externas para calcular festivos del ciclo y un año faltante rompe ese calculo.",
   "fechaInicio": "string corto. Ej: 22 JUN",
   "fechaFin": "string corto. Ej: 20 JUL",
   "duracion": "string. Ej: 4 SEMANAS",
@@ -74,6 +74,7 @@ Reglas de lenguaje simple (aplica SOLO a: objetivo, alcance, resultadoEsperado, 
 - El objetivo final es que una persona sin contexto tecnico entienda en pocos segundos en que se esta trabajando y por que importa.
 
 Reglas generales y de control de longitud:
+- REGLA DE AÑO EN "periodo": antes de devolver el JSON, revisa que "periodo" termine en un año de 4 digitos. Si el documento no lo dice explicitamente, usalo del año de "fechaInicio"/"fechaFin" si aparece ahi, o del año en que se redacto el documento; si no hay ninguna pista, usa el año actual. Esto no es opcional.
 - REGLA DE SIMETRÍA Y SÍNTESIS: Todas las épicas procesadas deben quedar perfectamente balanceadas en longitud. No permitas que una épica se extienda demasiado en "alcance" o "objetivo" listando elementos de más. Toma como estándar de concisión y síntesis el ejemplo de la épica de "Mateo v2.0".
 - Uso de Apodos y Participantes: Mapea los nombres estrictamente así: Daniel = DANI, Mauricio = MAURO, Luis = LUCHO. Solo debes mencionar e incluir en las respuestas a las personas que aparezcan explícitamente en el documento asignadas a alguna épica. Si alguien no tiene tareas en este periodo, exclúyelo por completo.
 - Una entrada en "epicas" por cada epica que encuentres en el documento. Puede haber 1, 2, 3 o mas.
