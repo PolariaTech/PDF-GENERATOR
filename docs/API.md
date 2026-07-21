@@ -202,6 +202,10 @@ Contenido de ejemplo de `sprint-1-junio-julio-2026.md` (fragmento real del domin
         "name": "LUIS DANIEL CANTILLO OSPINO",
         "initials": "LC",
         "objetivo": "Luis levanto la base operativa de la nueva app web de Polaria version 2.0. Diseno el esquema de base de datos para bodegas, catalogos, ordenes y estado de almacen, y configuro el modelo multi-tenant con seguridad a nivel de fila en Supabase. En paralelo construyo el backend modular en NestJS, el modulo de autenticacion y avanzo en el shell multi-rol del frontend en Next.js, dejando la base lista para que el equipo conecte los modulos de compras y configuracion el proximo sprint.",
+        "desviaciones": {
+          "logrado": "Luis completo el 100% de lo planeado (4 de 4 issues) y ademas cerro un issue adicional que se sumo en curso, sin dejar nada pendiente para el siguiente sprint.",
+          "motivo": "Las reuniones tomaron menos de lo planeado y ese tiempo fue a Proyectos; el unico agregado fue el backend modular, para no frenar al frontend."
+        },
         "projects": [
           {
             "name": "Polaria App - Construir aplicación web v2.0",
@@ -227,10 +231,6 @@ Contenido de ejemplo de `sprint-1-junio-julio-2026.md` (fragmento real del domin
     "riesgoTransversal": {
       "texto": "La migracion de datos y los nuevos modulos web corren en paralelo sin ambiente de pruebas dedicado, lo que puede generar errores que solo se detecten en produccion.",
       "mitigacion": "Validar cada entrega con datos reales antes de cerrarla y monitorear de cerca los primeros dias."
-    },
-    "desviaciones": {
-      "logrado": "El plan inicial se cumplio parcialmente: algunos issues planeados quedaron abiertos por mayor complejidad de la esperada, mientras el equipo sumo trabajo no previsto que surgio durante la semana.",
-      "motivo": "Los issues agregados respondieron a incidencias y pedidos que aparecieron en curso; los planeados sin cerrar pasan al siguiente sprint."
     }
   },
   "uso": {
@@ -459,6 +459,10 @@ Content-Type: application/json
         "name": "DANIEL DE JESUS GALVIS ZAMBRANO",
         "initials": "DG",
         "objetivo": "Daniel concentro su semana en preparar a Mateo Support para produccion sobre Supabase. Migro la base de datos operativa desde MySQL, construyo la infraestructura de RAG con pgvector y conecto el manual de usuario al flujo de consulta para que cada ticket se resuelva con contexto real antes de escalar. Tambien activo el manejador de errores en produccion, corrigio el identificador de numero telefonico y dejo resuelta la deuda tecnica que quedaba pendiente antes del despliegue de la version 1.2.0.",
+        "desviaciones": {
+          "logrado": "Daniel cerro 9 de 9 issues planeados y sumo 2 issues adicionales de infraestructura RAG, tambien completados; solo la deuda tecnica pre-produccion quedo en progreso al cierre.",
+          "motivo": "Las reuniones tomaron menos de lo planeado y ese tiempo fue a Proyectos, donde la infraestructura RAG agrego 2 issues no previstos."
+        },
         "projects": [
           {
             "name": "Mateo Support - Desplegar v1.2.0 en producción",
@@ -491,10 +495,6 @@ Content-Type: application/json
     "riesgoTransversal": {
       "texto": "La migracion de datos y los nuevos modulos web corren en paralelo sin ambiente de pruebas dedicado, lo que puede generar errores que solo se detecten en produccion.",
       "mitigacion": "Validar cada entrega con datos reales antes de cerrarla y monitorear de cerca los primeros dias."
-    },
-    "desviaciones": {
-      "logrado": "El plan inicial se cumplio parcialmente: algunos issues planeados quedaron abiertos por mayor complejidad de la esperada, mientras el equipo sumo trabajo no previsto que surgio durante la semana.",
-      "motivo": "Los issues agregados respondieron a incidencias y pedidos que aparecieron en curso; los planeados sin cerrar pasan al siguiente sprint."
     }
   }
 }
@@ -519,6 +519,52 @@ Content-Type: application/json
 
 ---
 
+## 5. Histórico de sprint (endpoints específicos, no siguen el patrón `:docType`)
+
+**Descripción de negocio:** única excepción al patrón genérico de arriba — el generador es *stateless* salvo por esto. Vive en `backend/src/documents/sprint/historico.routes.ts` + `historico.ts`, exclusivo de `sprint` (no existe equivalente para `epica`). Persiste un registro resumido por sprint cerrado en un archivo JSON local no versionado (`backend/data/sprint-historico.json`) para que `template-resumen-v3.html` pueda mostrar tendencia/proyección contra sprints anteriores.
+
+### 5.1 `POST /api/sprint/historico`
+
+Registra (o actualiza) un sprint cerrado en el histórico. **No se dispara automáticamente al llamar `/pdf`** — es una llamada explícita aparte, para que probar/regenerar el PDF final no ensucie el histórico.
+
+- **Body:** idéntico en forma y validación a `/api/sprint/pdf` (`{ datos, plantilla? }` o el schema en la raíz; `plantilla` se ignora).
+- **Comportamiento:** valida con `SprintSchema`, compone los datos (`componerDatosSprint`) para obtener los KPIs ya calculados, y hace **upsert** por `sprintName`+`weekNumber` — llamarlo de nuevo con el mismo sprint actualiza la entrada existente en vez de duplicarla.
+
+**Respuesta 200:**
+
+```json
+{
+  "success": true,
+  "entry": {
+    "sprintName": "1 JUNIO-JULIO 2026",
+    "weekNumber": "1",
+    "dateStart": "Jun 22",
+    "dateEnd": "Jun29",
+    "planPorcentajeCompletado": 94,
+    "agregadoPorcentajeCompletado": 75,
+    "globalPorcentaje": 112,
+    "horasPorcentaje": 108,
+    "saludEstado": "ACEPTABLE",
+    "registradoEn": "2026-07-21T17:43:33.915Z"
+  },
+  "total": 4
+}
+```
+
+**Respuestas de error:** mismo formato `ErrorResponseBody` que el resto de la API — `400 VALIDATION_ERROR` si el body no cumple `SprintSchema`, `500 INTERNAL_ERROR` si falla la escritura del archivo.
+
+### 5.2 `GET /api/sprint/historico`
+
+Devuelve la lista cruda de entradas registradas (sin filtrar ni paginar).
+
+**Respuesta 200:** `{ "success": true, "historico": [ { ...misma forma que "entry" arriba... }, ... ] }`
+
+### Cómo lo usa `componerDatosSprint()`
+
+En cada llamada a `/preview` o `/pdf` con plantilla `resumen-v3`, `componerDatosSprint()` **lee** (nunca escribe) el histórico, excluye el sprint actual si ya estaba registrado, toma los últimos 3 sprints anteriores y calcula `tendencia` (esos 3 + el actual) y `proyeccion` (`MEJORANDO`/`ESTABLE`/`EMPEORANDO` comparando el `globalPorcentaje` actual contra el promedio de esos 3). Si no hay ningún sprint previo registrado, `tendenciaDisponible` es `false` y la plantilla oculta esa sección sin error.
+
+---
+
 ## Ejemplos completos por `docType`
 
 ### `epica` — schema (`EpicaSchema`, `backend/src/documents/epica/config.ts`)
@@ -538,14 +584,21 @@ Content-Type: application/json
 | `epicas[].kpis` | array de string | Sí | mínimo 1 elemento |
 | `epicas[].resultadoEsperado` | string | Sí | máx. 200 caracteres |
 | `epicas[].riesgo` | string | Sí | máx. 200 caracteres |
+| `epicas[].cumplimiento` | string | No | máx. 320 caracteres. Solo aplica al flujo de **cierre** (plantilla `cierre`): narrativa cualitativa de qué tanto se logró vs. lo planeado. Editable a mano, nunca un porcentaje calculado |
+| `epicas[].sprints` | array de objeto | No | Solo aplica al flujo de **cierre**: los sprints que compusieron el ciclo de esta épica, alimenta el donut "Sprints del ciclo" de `template-cierre.html` |
+| `epicas[].sprints[].nombre` | string | Sí (si `sprints` viene) | — |
+| `epicas[].sprints[].estado` | enum | Sí (si `sprints` viene) | `"CUMPLIDO"` \| `"NO CUMPLIDO"` |
 | `equipo.quien` | string | Sí | máx. 150 caracteres |
 | `equipo.cuando` | string | Sí | máx. 150 caracteres |
 | `equipo.donde` | string | Sí | máx. 150 caracteres |
 | `equipo.como` | string | Sí | máx. 150 caracteres |
 | `riesgoTransversal.texto` | string | Sí | máx. 320 caracteres |
 | `riesgoTransversal.mitigacion` | string | Sí | máx. 200 caracteres |
+| `riesgoTransversalResultado` | string | No | máx. 260 caracteres. Solo aplica al flujo de **cierre**: si el riesgo transversal previsto en el resumen de inicio se materializó o no |
 
 Nota: `epica` no recibe bloque de horas en el body — `horas` es fijo (`HORAS_FIJAS` en `backend/src/constants.ts`) y se agrega automáticamente al renderizar (`componerDatosEpica`), no es parte del contrato de la API.
+
+Nota sobre `cierre`: `epicas[].cumplimiento`, `epicas[].sprints` y `riesgoTransversalResultado` son opcionales en el schema (el mismo `EpicaSchema` sirve para `default` e `cierre`) — solo se completan cuando el documento fuente describe resultados reales (no un plan). `template.html` (plantilla `default`) no los renderiza aunque vengan informados; solo `template-cierre.html` (plantilla `cierre`) los muestra.
 
 El ejemplo completo de request/response para `epica` está en la sección 3 (`/preview`) arriba; es el mismo body válido para `/pdf`.
 
@@ -561,11 +614,15 @@ El ejemplo completo de request/response para `epica` está en la sección 3 (`/p
 | `porcentajeCompletado` | number | Sí | 0–100 |
 | `horas.segmentos` | array de objeto | Sí | mínimo 1 elemento |
 | `horas.segmentos[].nombre` | string | Sí | — |
-| `horas.segmentos[].horas` | number | Sí | ≥ 0 |
+| `horas.segmentos[].horas` | number | Sí | ≥ 0 (horas reales del segmento) |
+| `horas.segmentos[].horasPlaneadas` | number | No | ≥ 0; opcional, por segmento. Horas que se habían planeado para ese segmento; lo rellena la integración (n8n desde el Sheet), la IA nunca lo completa. Reuniones (3.5h/persona) e incidencias (3h/persona) son fijas; Proyectos es el resto de la capacidad. Habilita el comparativo "planeadas → reales" en `resumen-v2` |
 | `members` | array de objeto | Sí | mínimo 1 elemento |
 | `members[].name` | string | Sí | — |
 | `members[].initials` | string | Sí | — |
 | `members[].objetivo` | string | Sí | máx. 600 caracteres (el prompt de IA apunta a 480–500 exactos, pero el schema solo exige el máximo) |
+| `members[].desviaciones.logrado` | string | Sí | máx. 320 caracteres. Desviación de alcance de ESA persona (issues planeados vs. completados) |
+| `members[].desviaciones.motivo` | string | Sí | máx. 200 caracteres. Justifica el desfase de horas planeadas vs. reales en relación con los issues logrados |
+| `members[].horas` | objeto | No | opcional; mismo shape que `horas` del documento (segmentos con `nombre`/`horas`/`horasPlaneadas`). Si viene, la suma de las `horas` de sus segmentos debe dar exactamente 40 (semana normal) u 32 (semana con festivo), y **todos** los members deben coincidir en ese total (validado en `superRefine`) |
 | `members[].projects` | array de objeto | Sí | mínimo 1 elemento |
 | `members[].projects[].name` | string | Sí | — |
 | `members[].projects[].issues` | array de objeto | Sí | mínimo 1 elemento |
@@ -577,8 +634,6 @@ El ejemplo completo de request/response para `epica` está en la sección 3 (`/p
 | `equipo.quien` / `.cuando` / `.donde` / `.como` | string | Sí | máx. 150 caracteres cada uno |
 | `riesgoTransversal.texto` | string | Sí | máx. 320 caracteres |
 | `riesgoTransversal.mitigacion` | string | Sí | máx. 200 caracteres |
-| `desviaciones.logrado` | string | Sí | máx. 320 caracteres |
-| `desviaciones.motivo` | string | Sí | máx. 200 caracteres |
 
 El ejemplo completo de request/response para `sprint` está en las secciones 2 (`/extraer`) y 4 (`/pdf`) arriba.
 

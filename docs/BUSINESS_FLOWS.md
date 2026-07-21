@@ -14,6 +14,7 @@
 | 2 | Selección de tipo de documento y plantilla | Configuración | Construido |
 | 3 | Generación automática de PDF de sprint desde Linear (n8n) | Automatización | Construido (extracción determinística) — pilot real corrido con éxito (2026-07-15) |
 | 4 | Casos borde compartidos entre el flujo manual y el plan de n8n | Casos borde | Aplican hoy, algunos sin mitigación |
+| 5 | Generación automática de PDF de épica desde un PDF en Google Drive (n8n) | Automatización | Construido (2026-07-17), inactivo — pendiente de atar credenciales y primer test |
 
 ---
 
@@ -162,9 +163,11 @@ Generación automática de punta a punta de un PDF de Sprint desde un ciclo de L
 
 **Cambios posteriores al pilot inicial** (detalle completo en ADR-0006 y ADR-0007):
 - El nodo que validaba los rangos de caracteres del texto narrativo y reintentaba `/extraer` una vez ante un fallo fue **eliminado** del workflow. Hoy no hay reintento ni validación de rangos en n8n — el paso `Consolidar Payload Final del Sprint` sigue pisando los campos calculables de forma determinística, pero ya no valida el texto que redacta el LLM.
-- El nombre del PDF subido a Drive ahora depende de la plantilla (`RESUMEN_INICIO_SPRINT_<N>_<MES-MES_AÑO>.PDF`, `RESUMEN_FINAL_...`, `DETAIL_...`, todo en mayúsculas), con autoincremento (`_1`, `_2`, ...) si ya existe un archivo con ese nombre en la subcarpeta del sprint — antes el nombre incluía un timestamp y no distinguía por plantilla.
-- La fila de la Sheet se marca como procesada matcheando por `Ciclo (nombre en Linear)` + `weekNumber`, no por el número de fila (`row_number`) — matchear por posición de fila resultaba en 0 filas actualizadas en la práctica.
+- El nombre del PDF subido a Drive ahora depende de la plantilla (`RESUMEN_INICIO_SPRINT_<N>_<MES-MES_AÑO>.PDF`, `RESUMEN_FINAL_...`, `DETAIL_...`, todo en mayúsculas), con autoincremento (`_1`, `_2`, ...) si ya existe un archivo con ese nombre en la subcarpeta del sprint — antes el nombre incluía un timestamp y no distinguía por plantilla. La carpeta padre en Drive se llama `01_SPRINTS` (no "Sprint PDFs" como decía el `cachedResultName` viejo de los nodos de Drive).
+- La fila de la Sheet se marca como procesada matcheando por `row_number` — pero no el valor leído al inicio del workflow (queda potencialmente stale tras ~40s de llamadas a Linear/OpenAI), sino uno recalculado justo antes de escribir: los nodos `Releer Sheet Antes de Marcar` + `Calcular Row Number Fresco` releen todo el Sheet en el momento y ubican en código (comparación de strings, no el matcher nativo de Google Sheets) la fila cuyo `Ciclo (nombre en Linear)` + `weekNumber` + `Plantilla` coinciden con los de la corrida actual. Se abandonó matchear directamente por esas 3 columnas de texto en el nodo de update porque, en la práctica (dos ejecuciones reales, 10014 y 10017), el nodo Google Sheets "update" no aplicó un AND estricto entre columnas y terminó escribiendo siempre la primera fila del rango en vez de la que realmente coincidía — un problema que solo se manifestó al existir, por diseño, hasta 3 filas por sprint (una por plantilla) compartiendo Ciclo+weekNumber.
 - El alto del PDF generado ahora también se achica cuando el contenido real es menor al alto de diseño de la plantilla, no solo crece (ver ADR-0007) — afecta a los 4 tipos de plantilla de `sprint`, no solo a la generación vía n8n.
+- Si no hay ninguna fila pendiente por procesar en la Sheet (todas con `Procesado=TRUE/SI/YES`), `Normalizar y Validar Fila del Sprint` ya no devuelve 0 items (lo que dejaba al IF `Verificar Fila Válida` sin ningún item que evaluar y el workflow moría en silencio, sin notificar a nadie) — devuelve un item con `esValida:false` y un `motivoError` explícito, que cae en la misma rama de "fila inválida" y dispara el correo correspondiente.
+- Al final de la rama de éxito se agregó un nodo `Enviar Informe de PDF Generado` (Gmail, HTML con la paleta de marca de Polaria — navy `#0b1430` + acento teal `#2dd4bf`): informa sprint, semana, plantilla, período, nombre del archivo, carpeta de Drive, fecha de generación y un botón directo al PDF. El contenido varía según la plantilla generada (armado en un nodo `Preparar Datos del Correo` previo): `detail` muestra el total de issues y su desglose por estado; `resumen-inicio` muestra issues planeados por persona (usando apodos del equipo — Lucho/Mauro/Dani — en vez del nombre completo); `resumen`/`resumen-v2` muestra estado del sprint, % completado, planeados vs. agregados y horas por segmento. Los 4 correos de notificación de error (ciclo sin issues, ciclo no encontrado, fila inválida, error del backend) también se convirtieron de texto plano a HTML con la misma paleta, usando un acento rojo/coral en vez de teal para diferenciarlos visualmente del correo de éxito.
 
 Hoy conviven dos workflows en n8n:
 - **`Sprint - Generar Resumen PDF con Extracción Determinística - Google Drive`** (id `rqkqaSiaFq0eK7lU`) — arquitectura vigente, descrita abajo. Con las 6 credenciales de sus nodos HTTP Request (3× `Linear Auth`, 3× `PDF Generator API`) asignadas manualmente por el operador desde la UI de n8n (2026-07-14), y pilot real corrido con éxito (2026-07-15).
@@ -196,18 +199,23 @@ Estado inicial → estado final: **Un ciclo (sprint) cerrado o en curso en Linea
 9. n8n llama al mismo endpoint que usa el frontend manual (`POST /api/sprint/pdf`), autenticado con una API key propia del backend.
 10. n8n confirma que la respuesta sea realmente un PDF (y no un JSON de error) antes de subir nada a Drive.
 11. n8n calcula el nombre del archivo según la plantilla (`RESUMEN_INICIO_...`, `RESUMEN_FINAL_...`, `DETAIL_...`, ver Postcondiciones), revisa si ya existe un archivo con ese nombre en la subcarpeta del sprint y le agrega un sufijo autoincremental (`_1`, `_2`, ...) si hace falta, antes de subirlo a Google Drive.
-12. n8n marca la fila de origen como procesada (matcheando por `Ciclo (nombre en Linear)` + `weekNumber`, no por posición de fila), con el link del archivo y la fecha.
+12. n8n relee el Sheet en el instante y ubica en código el `row_number` real de la fila de origen (ver arriba), y la marca como procesada con ese `row_number`, el link del archivo y la fecha.
+13. n8n envía un correo de informe (Polaria-branded) con el resultado y los datos clave del documento generado.
 
 ### Postcondiciones
-- La fila de la Sheet queda marcada `Procesado = TRUE`, con el link de Drive y un timestamp — la fila se identifica por `Ciclo (nombre en Linear)` + `weekNumber`, no por su número de fila.
-- El PDF queda disponible en la carpeta de Drive `Sprint PDFs`, en una subcarpeta por sprint (buscada por nombre exacto; creada si no existe), con un nombre determinístico según la plantilla usada: `RESUMEN_INICIO_SPRINT_<N>_<MES-MES_AÑO>.PDF` (`resumen-inicio`), `RESUMEN_FINAL_SPRINT_<N>_<MES-MES_AÑO>.PDF` (`resumen`/`resumen-v2`) o `DETAIL_SPRINT_<N>_<MES-MES_AÑO>.PDF` (`detail`), todo en mayúsculas; si ya existe un archivo con ese nombre, se le agrega `_1`, `_2`, etc.
+- La fila de la Sheet queda marcada `Procesado = TRUE`, con el link de Drive y un timestamp — la fila se identifica por un `row_number` recalculado justo antes de escribir (no por `Ciclo (nombre en Linear)` + `weekNumber` como columnas de match, ni por el `row_number` leído al inicio del workflow).
+- El PDF queda disponible en la carpeta de Drive `01_SPRINTS`, en una subcarpeta por sprint (buscada por nombre exacto; creada si no existe), con un nombre determinístico según la plantilla usada: `RESUMEN_INICIO_SPRINT_<N>_<MES-MES_AÑO>.PDF` (`resumen-inicio`), `RESUMEN_FINAL_SPRINT_<N>_<MES-MES_AÑO>.PDF` (`resumen`/`resumen-v2`) o `DETAIL_SPRINT_<N>_<MES-MES_AÑO>.PDF` (`detail`), todo en mayúsculas; si ya existe un archivo con ese nombre, se le agrega `_1`, `_2`, etc.
 - Queda un registro de auditoría de la corrida (workflow, timestamp, `sprintName`, éxito/fallo) en el Data Table de n8n `sprint_pdf_execution_log`.
+- Se envía un correo de informe a `daniel.galvis@polaria.tech` con el resultado (rama de éxito) o un correo de notificación de error (ramas de error), ambos HTML con la paleta de marca de Polaria.
 
 ### Casos de error y decisiones pendientes
 No se repiten aquí en detalle. El diseño original y su auditoría (con hallazgos ya resueltos en la construcción real, como la rama IF que distingue un PDF válido de un JSON de error antes de subir a Drive) viven en `PLAN-N8N-SPRINT-WORKFLOW.md` y `AUDITORIA-PLAN-N8N-SPRINT-WORKFLOW.md`; el cambio de arquitectura (AI Agent → extracción determinística) y sus consecuencias viven en `docs/adr/0006-extraccion-deterministica-en-vez-de-ai-agent-para-sync-de-linear.md`. Pendiente:
 - Decidir si se archiva el workflow anterior basado en AI Agent, ahora que el pilot real del workflow determinístico ya corrió con éxito (2026-07-15).
 - Decidir si se mantiene algún gate de confirmación humana antes de considerar un PDF automático como definitivo para liderazgo (mismo punto abierto que ya señalaba el plan original) — más relevante todavía ahora que no hay validación de rangos de caracteres antes de generar el PDF (ver punto siguiente).
 - Evaluar si conviene reintroducir alguna validación mínima del texto narrativo (sin necesariamente el reintento automático que existía antes de eliminarse) — ver ADR-0006.
+- **KPI de horas adicional en `resumen-v2` — implementado en backend (2026-07-16), pendiente de wiring en n8n.** En el Sprint Planning 4 (2026-07-14, notas en `2026-07-14_SprintPlanning_Sprint4_JunioJulio.md`) Edgar señaló que el KPI "global" (issues Done / issues planeados, conteo puro) no refleja el sobreesfuerzo real cuando se trabajan muchas más horas de las planeadas (ejemplo real: 78-80h planeadas vs. 116h trabajadas dieron 109% cuando él esperaba ~130%). Se descartó reemplazar el "global" por uno basado solo en horas (pierde la señal de si el trabajo realmente se completó) y también excluir issues `Cancelled` del denominador (un issue cancelado sigue siendo evidencia de mala planeación). El "global" de issues se deja exactamente como está; se agregó un KPI de horas **adicional** (4to bloque del header de `resumen-v2`, mismos rangos de color que "global" vía `resolverEstadoGlobal`): `SprintSchema` gana un campo opcional `horas.segmentos[].horasPlaneadas` (solo aplica al segmento "Proyectos (3 objetivos)"; la IA nunca lo completa, ver `SPRINT_SYSTEM_PROMPT`) y `componerDatosSprint()` calcula `horasPorcentaje = round(horas/horasPlaneadas * 100)` sobre ese segmento — el KPI (`horasKpiDisponible`) solo aparece si el campo viene informado. **Pendiente:** n8n (`rqkqaSiaFq0eK7lU`) todavía no rellena `horasPlaneadas` al armar el payload del documento de cierre — hay que agregar el paso que busca la fila `resumen-inicio` del mismo Ciclo+weekNumber y copia (o recalcula desde su `Festivos`) el valor planeado de Proyectos antes de `Consolidar Payload Final del Sprint`. Sin ese wiring, el KPI de horas simplemente no aparece (comportamiento seguro, no rompe nada).
+- **Desviación de horas planeadas vs. reales por segmento en `resumen-v2` — ampliación en backend (2026-07-17), pendiente de wiring en n8n.** A partir de la misma base del KPI de horas, la sección de "Desviaciones de alcance" de cada miembro (y el bloque de horas del equipo en el footer) ahora justifica el cambio de **horas planeadas vs. reales frente al trabajo logrado (issues)**. Cambios de backend: `horasPlaneadas` deja de aplicar solo al segmento "Proyectos" y puede venir en **cualquier** segmento; `construirBloqueHoras()` expone por segmento `horasPlaneadas`/`tienePlaneadas` y a nivel bloque `planeadasDisponibles`; `template-resumen-v2.html` muestra un badge `PLAN → REAL` y cada segmento como `planeadas → reales` (`3.5h → 1.2h`) cuando hay planeadas, cayendo al formato anterior (`% · h`) si no; y `SPRINT_SYSTEM_PROMPT` instruye al LLM a que `members[].desviaciones.motivo` explique el desfase de horas ligado a los issues (sin rellenar `horasPlaneadas`, que sigue siendo dato de integración). Reglas de negocio de las horas planeadas: son **fijas por persona y semana** — 3.5h de reuniones y 3h de incidencias por persona (aunque los 3 estén en la misma reunión) — más personalizaciones **variables** (se define en el Sheet si la semana las lleva) y Proyectos como el resto hasta la capacidad (40/32). **Pendiente n8n:** poblar `horasPlaneadas` en **cada** segmento de `horas.segmentos` (documento) y de cada `members[].horas.segmentos` con esos valores fijos + personalizaciones del Sheet + Proyectos = capacidad − resto; a nivel documento, las sumas del equipo. Sin ese wiring la tarjeta cae al formato anterior de solo horas reales.
+- **Plantilla `resumen-v3` (2026-07-21): semáforo único, utilización de capacidad, pendientes al cierre y tendencia — pendiente de wiring en n8n.** Análisis completo en `ANALISIS_INFORME_EJECUTIVO_SPRINT_RESUMEN_V2.md`. Sin cambios de schema/prompt salvo la única pieza que sí toca arquitectura: el generador deja de ser puramente stateless para la tendencia — `backend/src/documents/sprint/historico.ts` persiste un JSON local no versionado (`backend/data/sprint-historico.json`) con un resumen por sprint cerrado, expuesto vía `POST/GET /api/sprint/historico` (`historico.routes.ts`, ver `docs/API.md` sección 5) — **deliberadamente separado de `/pdf`**, no se registra nada automáticamente al generar el PDF final. `componerDatosSprint()` lee ese histórico (solo lectura) para calcular `tendencia`/`proyeccion` (últimos 3 sprints + el actual, MEJORANDO/ESTABLE/EMPEORANDO vs. promedio). **Pendiente n8n (`rqkqaSiaFq0eK7lU`):** agregar el paso que llama a `POST /api/sprint/historico` cuando un sprint de verdad cierra (no en cada regeneración/prueba del PDF) — sin ese wiring, `resumen-v3` sigue funcionando pero la sección de tendencia nunca aparece (comportamiento seguro).
 
 ### Reglas de negocio que aplican
 - El JSON final debe cumplir exactamente el mismo `SprintSchema` que valida hoy el flujo manual — no hay un schema paralelo para automatización.
@@ -243,11 +251,61 @@ Estos dos casos fueron identificados durante la auditoría del plan de n8n (`AUD
 
 ---
 
+## Flujo 5 — Generación automática de PDF de épica desde un PDF en Google Drive (n8n)
+
+### Nombre del flujo
+Generación automática de punta a punta de un PDF de resumen de épica a partir de un PDF de planning subido a Google Drive, sin edición manual del JSON, mediante un workflow de n8n.
+
+### Estado actual
+**Construido (2026-07-17), todavía inactivo.** Workflow de n8n `Epica - Generar Resumen PDF - Google Drive` (id `jRYd4dDes9Eh0rO3`, proyecto personal de Polaria Tech). Es el gemelo del Flujo 3 pero para el tipo de documento `epica`: reutiliza el mismo patrón (descargar fuente → llamar `POST /api/epica/extraer` → `POST /api/epica/pdf` → subir a Drive → notificar por correo) sin backend paralelo. Pendiente antes de activarlo: atar manualmente las credenciales de sus nodos (Google Drive OAuth, Header Auth `PDF-GENERATOR` en los 2 nodos HTTP, Gmail OAuth) desde la UI de n8n, y correr un primer test.
+
+### Objetivo del flujo
+Estado inicial → estado final: **Un PDF de planning de épica (`EPICA_<PERIODO>.pdf`) subido a una subcarpeta de la carpeta de Drive `00_EPICAS`** → **un PDF de resumen de épica (`RESUMEN_INICIO_EPICA_<PERIODO>.pdf`) generado y subido a esa misma subcarpeta**, sin que nadie copie datos a un Markdown ni edite el JSON a mano.
+
+### Actores involucrados
+| Actor | Rol en este flujo |
+|---|---|
+| Equipo | Sube el PDF de planning de la épica a una subcarpeta de `00_EPICAS` (no dispara nada más — el trigger es automático) |
+| n8n (orquestador) | Detecta el PDF nuevo, verifica que sea una fuente de épica, descarga el PDF, extrae su texto, llama a `POST /api/epica/extraer` y `POST /api/epica/pdf`, y sube el resultado a Drive |
+| Google Drive | Fuente (PDF de planning) y destino (PDF de resumen) — misma subcarpeta |
+| Backend — extracción (`POST /api/epica/extraer`) | El mismo endpoint del flujo manual: recibe el **texto** extraído del PDF (el endpoint lee el archivo como UTF-8, por eso el PDF se convierte a texto antes; no acepta el PDF binario) y devuelve el JSON estructurado de `EpicaSchema` vía OpenAI |
+| Backend — PDF (`POST /api/epica/pdf`) | Valida y genera el PDF — mismo endpoint del Flujo 1 |
+
+### Resumen del flujo en términos de negocio
+1. El trigger de Google Drive vigila **todo My Drive** (`anyFileFolder`, poll cada minuto) — necesario porque el trigger de "carpeta específica" de n8n no detecta archivos creados en subcarpetas, y las fuentes viven en subcarpetas de `00_EPICAS`.
+2. Un filtro descarta todo lo que no sea una fuente de épica: nombre que empieza por `EPICA_`, extensión `.pdf` y mimetype PDF. (Ese mismo filtro por prefijo `EPICA_` evita que el workflow se dispare con su propio output `RESUMEN_INICIO_...` y entre en bucle.)
+3. n8n lista las subcarpetas de `00_EPICAS` y confirma que el PDF nuevo cuelga de una de ellas (verificación de ubicación); si no, no hace nada.
+4. n8n descarga el PDF fuente y extrae su texto (nodo *Extract from File*, operación PDF).
+5. n8n convierte ese texto a un archivo `.md` y lo envía a `POST /api/epica/extraer`; si no vuelven datos válidos, manda un correo de error y corta.
+6. n8n envía el JSON (`datos`) a `POST /api/epica/pdf`; confirma que la respuesta sea realmente un PDF (status 200 + content-type `application/pdf`) antes de subir nada; si no, correo de error.
+7. n8n calcula el nombre de salida (`RESUMEN_INICIO_` + nombre de la fuente, con autoincremento `_1`, `_2`, … si ya existe) y sube el PDF a la misma subcarpeta.
+8. n8n envía un correo de informe (Polaria-branded) con la carpeta, el archivo generado, la fuente y un botón directo a Drive.
+
+### Postcondiciones
+- El PDF de resumen queda en la misma subcarpeta de `00_EPICAS` que la fuente, con nombre `RESUMEN_INICIO_EPICA_<PERIODO>.pdf` (autoincremental si ya existía). El prefijo `RESUMEN_INICIO_` es deliberado: más adelante habrá también un resumen **final** de épica, y "inicio" lo distingue del de cierre.
+- Notificación por Gmail a `daniel.galvis@polaria.tech`: correo de éxito (rama feliz) o de error (falló la extracción, o el backend no devolvió un PDF). No hay Data Table de auditoría en este flujo (a diferencia del Flujo 3), solo correo.
+- El sistema no persiste nada más; el backend es sin estado igual que en los demás flujos.
+
+### Casos de error y decisiones pendientes
+- **Credenciales sin atar:** el workflow se creó sin las credenciales asignadas automáticamente en los 2 nodos HTTP del backend; hay que atarlas (y verificar las de Drive/Gmail) en la UI antes de activarlo.
+- **Trigger ruidoso:** al vigilar todo My Drive, el workflow "arranca y se detiene" en cada archivo nuevo del Drive antes de filtrar por nombre — ejecuciones abundantes en el historial, todas descartadas salvo las fuentes de épica. Es el costo de poder detectar archivos en subcarpetas.
+- **Riesgo a verificar en el primer test:** la verificación de ubicación depende de que el payload del trigger incluya el campo `parents`. Si no viniera, el workflow no haría nada en silencio; en ese caso habría que cambiar la verificación por un fetch de metadata del archivo.
+- Reutiliza los mismos límites del backend que el Flujo 1/3 (timeout de render de 15s, cola de 4 renders, etc.).
+- **Plantilla `cierre` — backend listo (`EpicaSchema.epicas[].cumplimiento`/`.sprints` + `riesgoTransversalResultado`, `template-cierre.html`, ver `CLAUDE.md`), sin workflow de n8n todavía.** Este Flujo 5 solo genera `RESUMEN_INICIO_...` con la plantilla `default`; no existe (ni está planeado en detalle) un workflow equivalente que dispare `plantilla: "cierre"` al cerrar el mes. Cuando se construya, es candidato natural a reusar la mayoría de nodos de este mismo workflow (descarga → extraer → pdf → subir → notificar), cambiando solo el `body.plantilla` y el nombre de salida (`RESUMEN_FINAL_EPICA_...` en vez de `RESUMEN_INICIO_...`, mismo criterio que `sprint` en el Flujo 3).
+
+### Reglas de negocio que aplican
+- El JSON final debe cumplir el mismo `EpicaSchema` que valida el flujo manual — no hay schema paralelo para automatización.
+- `epica` no tiene bloque de horas editable: siempre usa `HORAS_FIJAS` (`backend/src/constants.ts`), igual que en el Flujo 1; el JSON de `/pdf` no incluye horas.
+- El endpoint que llama n8n (`/api/epica/extraer`, `/api/epica/pdf`) es el mismo que usa el frontend manual: cualquier cambio de contrato afecta ambos flujos a la vez.
+
+---
+
 ## Referencias
 - Plan técnico original de la automatización (AI Agent, registro histórico): `PLAN-N8N-SPRINT-WORKFLOW.md`
 - Auditoría del plan original (hallazgos por severidad + plan de acción priorizado): `AUDITORIA-PLAN-N8N-SPRINT-WORKFLOW.md`
 - Decisión de arquitectura vigente (extracción determinística en vez de AI Agent): `docs/adr/0006-extraccion-deterministica-en-vez-de-ai-agent-para-sync-de-linear.md`
 - Mecanismo de alto auto-ajustable del PDF (crece y se achica según el contenido real): `docs/adr/0007-altura-de-pdf-tambien-se-achica-no-solo-crece.md`
 - Contrato de datos de cada tipo de documento: `backend/src/documents/epica/config.ts`, `backend/src/documents/sprint/config.ts`
+- Workflows de n8n: sprint `rqkqaSiaFq0eK7lU` (Flujo 3), épica `jRYd4dDes9Eh0rO3` (Flujo 5)
 - Rutas y forma de los errores de la API: `backend/src/api/document.routes.ts`
 - Motor de render y sus límites (timeout, concurrencia, alto auto-ajustable): `backend/src/core/generators/pdf.generator.ts`

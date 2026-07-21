@@ -26,16 +26,6 @@
         --amber-bg: #fdf3da;
         --amber-border: #f3e3b3;
         --amber-text: #7a5c12;
-        /* Estado KPI (Planeados / Agregados): valores de referencia para el
-           backend (KPI_ESTADO_CFG) — el HTML consume los hex vía
-           {{planEstadoBg}}/{{planEstadoColor}} y sus equivalentes de
-           "agregados", nunca estas variables directamente. */
-        --state-cumplido-bg: #d7f6f0;
-        --state-cumplido-text: #0f766e;
-        --state-progreso-bg: #fdf3da;
-        --state-progreso-text: #7a5c12;
-        --state-riesgo-bg: #fbe2e1;
-        --state-riesgo-text: #b3261e;
       }
       * {
         box-sizing: border-box;
@@ -56,6 +46,38 @@
         display: flex;
         flex-direction: column;
         gap: 16px;
+      }
+
+      /* Resumen ejecutivo: primero que todo lo demas, veredicto en una linea. */
+      .health-banner {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        border-radius: 14px;
+        border: 1px solid var(--card-border);
+        padding: 14px 20px;
+        background: #fff;
+      }
+      .health-badge {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-shrink: 0;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        padding: 8px 16px;
+        border-radius: 20px;
+        color: #fff;
+      }
+      .health-text {
+        font-size: 12.5px;
+        color: var(--ink-600);
+        line-height: 1.5;
+      }
+      .health-text strong {
+        color: var(--ink-900);
       }
 
       .header {
@@ -172,23 +194,83 @@
         letter-spacing: 0.04em;
         margin-bottom: 6px;
       }
-      .legend {
-        display: flex;
-        gap: 14px;
-        justify-content: flex-end;
-        font-size: 11px;
-        color: #cfd5e6;
-      }
-      .legend-item {
+
+      /* Tendencia (Fase 3): historico de sprints cerrados leido de
+         backend/data/sprint-historico.json (ver historico.ts) -- solo
+         aparece si hay al menos un sprint anterior registrado. */
+      .trend-row {
         display: flex;
         align-items: center;
-        gap: 5px;
+        justify-content: space-between;
+        gap: 20px;
+        background: #fff;
+        border: 1px solid var(--card-border);
+        border-radius: 14px;
+        padding: 14px 20px;
       }
-      .legend-dot {
-        width: 7px;
-        height: 7px;
-        border-radius: 50%;
-        display: inline-block;
+      .trend-row-left {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+      }
+      .trend-label {
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        color: var(--ink-400);
+        text-transform: uppercase;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+      }
+      .trend-items {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .trend-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        padding: 4px 10px;
+        border-radius: 8px;
+      }
+      .trend-item-actual {
+        background: var(--bg-page);
+      }
+      .trend-pct {
+        font-size: 14px;
+        font-weight: 800;
+      }
+      .trend-sprint {
+        font-size: 8.5px;
+        font-weight: 600;
+        color: var(--ink-400);
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        white-space: nowrap;
+      }
+      .trend-forecast {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+      }
+      .trend-forecast-badge {
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        padding: 4px 10px;
+        border-radius: 20px;
+        white-space: nowrap;
+      }
+      .trend-forecast-text {
+        font-size: 10.5px;
+        color: var(--ink-600);
+        white-space: nowrap;
       }
 
       .cards-grid {
@@ -362,11 +444,13 @@
         width: 48px;
         height: 48px;
       }
+      /* Solo 5 categorias reales (ver ESTADO_DONUT_KEYS_V3 en config.ts), no 9
+         -- 3 filas x 2 columnas en vez de 5 filas x 2 columnas de resumen-v2. */
       .estado-legend {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
         grid-auto-flow: column;
-        grid-template-rows: repeat(5, auto);
+        grid-template-rows: repeat(3, auto);
         gap: 6px 18px;
         flex: 1;
       }
@@ -441,6 +525,25 @@
         margin-bottom: 6px;
       }
 
+      .hours-badges {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      /* Utilizacion de capacidad por miembro: reusa porcentaje/estadoSprint
+         que construirBloqueHoras() ya calcula por persona (config.ts), antes
+         sin renderizar en ningun template. */
+      .util-badge {
+        font-size: 8.5px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        padding: 2px 7px;
+        border-radius: 4px;
+        white-space: nowrap;
+      }
+
       .hours-sub {
         font-size: 10px;
         color: var(--ink-400);
@@ -505,6 +608,57 @@
         color: var(--ink-900);
       }
 
+      /* Issues planeados que no llegaron a Done al cierre (ver `vencidos` en
+         config.ts) -- retrospectivo, distinto de riesgoTransversal. */
+      .pending-box {
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+        padding: 12px 14px;
+        background: #f8f9fc;
+      }
+
+      .pending-label {
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        color: var(--ink-400);
+        text-transform: uppercase;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+
+      .pending-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .pending-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .pending-title {
+        font-size: 10.5px;
+        color: var(--ink-600);
+        line-height: 1.35;
+      }
+
+      .pending-status {
+        font-size: 8.5px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        padding: 2px 7px;
+        border-radius: 4px;
+        white-space: nowrap;
+        text-transform: uppercase;
+        flex-shrink: 0;
+      }
+
       .transversal-box {
         background: var(--amber-bg);
         border: 1px solid var(--amber-border);
@@ -553,6 +707,18 @@
   </head>
   <body>
     <div class="page">
+      <div class="health-banner">
+        <div class="health-badge" style="background:{{saludColor}}">
+          <i class="ti ti-gauge"></i> Sprint {{saludEstado}}
+        </div>
+        <div class="health-text">
+          <strong>{{planPorcentajeCompletado}}%</strong> de lo planeado completado ·
+          <strong>{{agregadoPorcentajeCompletado}}%</strong> de lo agregado ·
+          <strong>{{globalPorcentaje}}%</strong> global vs. lo planeado{{#if horas.kpiDisponible}} ·
+          <strong>{{horas.porcentaje}}%</strong> de horas vs. lo planeado{{/if}}.
+        </div>
+      </div>
+
       <div class="header">
         <div class="header-top">
           <div class="header-left">
@@ -573,31 +739,31 @@
 
         <div class="header-kpis">
           <div class="kpi-block">
-            <div class="kpi-label">Planeados · % completado</div>
+            <div class="kpi-label">Issues Planeados · % completado</div>
             <div class="kpi-value-row">
               <span class="kpi-value">{{planPorcentajeCompletado}}%</span>
               <span
                 class="kpi-badge"
-                style="background:{{planEstadoBg}}; color:{{planEstadoColor}}"
-                >{{planEstadoSprint}}</span
+                style="background:{{planEstadoBgV3}}; color:{{planEstadoColorV3}}"
+                >{{planEstadoV3}}</span
               >
             </div>
           </div>
           <div class="kpi-divider"></div>
           <div class="kpi-block">
-            <div class="kpi-label">Agregados · % completado</div>
+            <div class="kpi-label">Issues Agregados · % completado</div>
             <div class="kpi-value-row">
               <span class="kpi-value">{{agregadoPorcentajeCompletado}}%</span>
               <span
                 class="kpi-badge"
-                style="background:{{agregadoEstadoBg}}; color:{{agregadoEstadoColor}}"
-                >{{agregadoEstadoSprint}}</span
+                style="background:{{agregadoEstadoBgV3}}; color:{{agregadoEstadoColorV3}}"
+                >{{agregadoEstadoV3}}</span
               >
             </div>
           </div>
           <div class="kpi-divider"></div>
           <div class="kpi-block">
-            <div class="kpi-label">Global · % vs. planeado</div>
+            <div class="kpi-label">Issues Globales · % vs. planeado</div>
             <div class="kpi-value-row">
               <span class="kpi-value">{{globalPorcentaje}}%</span>
               <span
@@ -623,6 +789,34 @@
           {{/if}}
         </div>
       </div>
+
+      {{#if tendenciaDisponible}}
+      <div class="trend-row">
+        <div class="trend-row-left">
+          <div class="trend-label">
+            <i class="ti ti-trending-up"></i>TENDENCIA · GLOBAL % VS. PLANEADO
+          </div>
+          <div class="trend-items">
+            {{#each tendencia}}
+            <div class="trend-item {{#if this.esActual}}trend-item-actual{{/if}}">
+              <div class="trend-pct" style="color:{{this.color}}">{{this.globalPorcentaje}}%</div>
+              <div class="trend-sprint">S{{this.weekNumber}}{{#if this.esActual}} · ACTUAL{{/if}}</div>
+            </div>
+            {{/each}}
+          </div>
+        </div>
+        {{#if proyeccion}}
+        <div class="trend-forecast">
+          <span
+            class="trend-forecast-badge"
+            style="background:{{proyeccion.bg}}; color:{{proyeccion.color}}"
+            >{{proyeccion.direccion}}</span
+          >
+          <span class="trend-forecast-text">vs. promedio anterior {{proyeccion.promedioGlobal}}%</span>
+        </div>
+        {{/if}}
+      </div>
+      {{/if}}
 
       <div class="cards-grid" style="--card-count: {{members.length}}">
         {{#each members}}
@@ -693,7 +887,7 @@
                 </div>
               </div>
               <div class="estado-legend">
-                {{#each this.estadoConteos}}
+                {{#each this.estadoConteosV3}}
                 <div class="estado-legend-row">
                   <span class="stats-dot" style="background:{{this.color}}"></span>
                   {{this.label}}<span class="stats-legend-val">{{this.valor}}</span>
@@ -709,11 +903,20 @@
               <div class="footer-box-label" style="margin-bottom: 0">
                 CUÁNTO · TIEMPO DEDICADO
               </div>
-              {{#if this.horas.planeadasDisponibles}}
-              <span class="hours-badge">PLAN → REAL</span>
-              {{else}}
-              <span class="hours-badge">REAL</span>
-              {{/if}}
+              <div class="hours-badges">
+                {{#if this.horas.kpiDisponible}}
+                <span
+                  class="util-badge"
+                  style="background:{{this.horas.estadoBg}}; color:{{this.horas.estadoColor}}"
+                  >{{this.horas.porcentaje}}% CAPACIDAD</span
+                >
+                {{/if}}
+                {{#if this.horas.planeadasDisponibles}}
+                <span class="hours-badge">PLAN → REAL</span>
+                {{else}}
+                <span class="hours-badge">REAL</span>
+                {{/if}}
+              </div>
             </div>
             <div class="hours-sub">{{this.horas.total}}h totales</div>
             <div class="bar-track">
@@ -737,6 +940,26 @@
                   >{{this.nombre}}
                 </span>
                 <span class="val">{{#if this.tienePlaneadas}}{{this.horasPlaneadas}}h → {{this.horas}}h{{else}}{{this.pct}}% · {{this.horas}}h{{/if}}</span>
+              </div>
+              {{/each}}
+            </div>
+          </div>
+          {{/if}}
+
+          {{#if this.vencidos}}
+          <div class="pending-box">
+            <div class="pending-label">
+              <i class="ti ti-clock-exclamation"></i>PENDIENTES AL CIERRE ({{this.vencidos.length}})
+            </div>
+            <div class="pending-list">
+              {{#each this.vencidos}}
+              <div class="pending-row">
+                <span class="pending-title">{{this.title}}</span>
+                <span
+                  class="pending-status"
+                  style="background:{{this.statusBg}}; color:{{this.statusColor}}"
+                  >{{this.status}}</span
+                >
               </div>
               {{/each}}
             </div>

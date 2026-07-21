@@ -194,6 +194,10 @@
           nameFromData(data) {
             return data.periodo || "mes";
           },
+          templates: [
+            { key: "default", label: "Inicio" },
+            { key: "cierre", label: "Cierre" },
+          ],
         },
         sprint: {
           label: "Sprint",
@@ -211,6 +215,7 @@
             { key: "resumen-inicio", label: "Resumen inicio" },
             { key: "resumen", label: "Resumen fin" },
             { key: "resumen-v2", label: "Resumen fin v2" },
+            { key: "resumen-v3", label: "Resumen fin v3" },
           ],
         },
       };

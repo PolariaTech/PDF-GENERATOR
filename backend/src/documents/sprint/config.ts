@@ -1,7 +1,23 @@
 import path from "path";
 import { z } from "zod";
-import { asignarPaleta, formatearHoras } from "../../constants";
+import { asignarPaleta, construirGradiente, formatearHoras } from "../../constants";
 import { DocumentConfig } from "../types";
+import { leerHistorico } from "./historico";
+
+// Total de horas de una persona en una semana: siempre 8h x dias habiles, y
+// TODOS los miembros del sprint deben sumar exactamente el mismo total. Solo
+// un festivo en la semana lo baja de 40 (5 dias) a 32 (4 dias); ese calculo ya
+// lo resuelve n8n desde el Sheet antes de armar el JSON -- aqui solo
+// validamos que lo que llegue sea uno de estos dos valores, igual para todos
+// (ver superRefine en SprintSchema).
+const CAPACIDADES_VALIDAS_HORAS_MIEMBRO = [40, 32] as const;
+const TOLERANCIA_HORAS = 0.01;
+
+function esCapacidadValida(total: number): boolean {
+  return CAPACIDADES_VALIDAS_HORAS_MIEMBRO.some(
+    (capacidad) => Math.abs(total - capacidad) < TOLERANCIA_HORAS,
+  );
+}
 
 export const IssueTypeSchema = z.enum(["Bug", "Feature", "Improvement"]);
 export const IssuePrioritySchema = z.enum(["Urgent", "High", "Medium", "Low"]);
@@ -13,6 +29,18 @@ export const IssueStatusSchema = z.enum([
   "Cancelled",
 ]);
 
+// Mismo shape para el bloque de horas del documento (equipo completo) y el de
+// cada member (horas individuales) -- ver construirBloqueHoras().
+const HorasSegmentoSchema = z.object({
+  nombre: z.string(),
+  horas: z.number().nonnegative(),
+  // Solo aplica al segmento "Proyectos (3 objetivos)": horas que se habian
+  // planeado para Proyectos al inicio del sprint (documento: copiadas del
+  // resumen-inicio del mismo sprint; member: la porcion de esa persona).
+  // No lo llena la IA -- ver SPRINT_SYSTEM_PROMPT.
+  horasPlaneadas: z.number().nonnegative().optional(),
+});
+
 export const SprintSchema = z.object({
   sprintName: z.string().toUpperCase(),
   dateStart: z.string(),
@@ -21,18 +49,34 @@ export const SprintSchema = z.object({
   estadoSprint: z.enum(["CUMPLIDO", "NO CUMPLIDO"]),
   porcentajeCompletado: z.number().min(0).max(100),
   horas: z.object({
-    segmentos: z.array(
-      z.object({
-        nombre: z.string(),
-        horas: z.number().nonnegative(),
-      }),
-    ).min(1),
+    segmentos: z.array(HorasSegmentoSchema).min(1),
   }),
   members: z.array(
     z.object({
       name: z.string(),
       initials: z.string(),
       objetivo: z.string().max(600),
+      // Reemplaza al riesgo transversal en el resumen final (template-resumen-v2):
+      // en un sprint cerrado el riesgo ya no aplica, se explican las desviaciones
+      // de alcance de ESTE miembro (planeado vs. realmente hecho por el/ella).
+      // Ver daily 2026-07-07 (Edgar) y decision de moverlo a nivel de miembro (2026-07-17).
+      desviaciones: z.object({
+        logrado: z.string().max(320),
+        motivo: z.string().max(200),
+      }),
+      // Horas individuales de esta persona, mismo shape que el bloque "horas"
+      // del documento. Opcional: no lo llena la IA, se agrega despues a mano o
+      // por integracion (ver SPRINT_SYSTEM_PROMPT). Sin este dato, la tarjeta
+      // simplemente no muestra la seccion de horas para ese miembro. La suma de
+      // todos los segmentos (Proyectos + Reuniones + Incidencias + cualquier
+      // otro) debe dar exactamente 40 u 32, y TODOS los miembros deben coincidir
+      // en el mismo total -- se valida en el superRefine de SprintSchema, no
+      // aqui, porque requiere comparar entre members.
+      horas: z
+        .object({
+          segmentos: z.array(HorasSegmentoSchema).min(1),
+        })
+        .optional(),
       projects: z.array(
         z.object({
           name: z.string(),
@@ -59,13 +103,40 @@ export const SprintSchema = z.object({
     texto: z.string().max(320),
     mitigacion: z.string().max(200),
   }),
-  // Reemplaza al riesgo transversal en el resumen final (template-resumen-v2):
-  // en un sprint cerrado el riesgo ya no aplica, se explican las desviaciones de
-  // alcance (planeado vs. realmente hecho). Ver daily 2026-07-07 (Edgar).
-  desviaciones: z.object({
-    logrado: z.string().max(320),
-    motivo: z.string().max(200),
-  }),
+}).superRefine((datos, ctx) => {
+  const totalesPorMiembro = datos.members
+    .map((member, indice) => ({
+      indice,
+      total: member.horas?.segmentos.reduce((suma, segmento) => suma + segmento.horas, 0),
+    }))
+    .filter(
+      (entrada): entrada is { indice: number; total: number } => entrada.total !== undefined,
+    );
+
+  if (totalesPorMiembro.length === 0) return;
+
+  for (const { indice, total } of totalesPorMiembro) {
+    if (!esCapacidadValida(total)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["members", indice, "horas"],
+        message: `Las horas totales de este miembro deben sumar exactamente 40 (semana normal) o 32 (semana con festivo); suman ${total}.`,
+      });
+    }
+  }
+
+  const totalesDistintos = new Set(
+    totalesPorMiembro.map(({ total }) => Math.round(total * 100) / 100),
+  );
+  if (totalesDistintos.size > 1) {
+    for (const { indice } of totalesPorMiembro) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["members", indice, "horas"],
+        message: `Todos los miembros deben sumar el mismo total de horas (40 u 32); hay valores distintos entre members: ${[...totalesDistintos].join(", ")}.`,
+      });
+    }
+  }
 });
 
 export type SprintData = z.infer<typeof SprintSchema>;
@@ -143,6 +214,36 @@ function resolverEstadoGlobal(porcentaje: number) {
   return { estado, ...ESTADO_GLOBAL_CFG[estado] };
 }
 
+// Semaforo unificado (ÓPTIMO/ACEPTABLE/DESVIADO, mismos colores que
+// resolverEstadoGlobal) para porcentajes de completado 0-100 (Planeados /
+// Agregados) -- exclusivo de template-resumen-v3: reemplaza ahi el semaforo
+// binario CUMPLIDO/NO CUMPLIDO de resolverEstadoSprint (que se queda sin
+// cambios para resumen/resumen-v2) para que las 4 tarjetas de KPI del header
+// compartan un solo vocabulario. Umbrales propios (no simetricos alrededor de
+// 100 como resolverEstadoGlobal, porque un % completado no puede pasar de 100).
+function resolverEstadoCompletado(porcentaje: number) {
+  let estado: keyof typeof ESTADO_GLOBAL_CFG;
+  if (porcentaje >= 90) {
+    estado = "ÓPTIMO";
+  } else if (porcentaje >= 75) {
+    estado = "ACEPTABLE";
+  } else {
+    estado = "DESVIADO";
+  }
+  return { estado, ...ESTADO_GLOBAL_CFG[estado] };
+}
+
+// Orden de severidad para el semaforo agregado de salud del sprint (v3): el
+// peor estado entre los KPIs aplicables domina el veredicto general.
+const SEVERIDAD_ESTADO: Record<string, number> = { ÓPTIMO: 0, ACEPTABLE: 1, DESVIADO: 2 };
+
+// Categorias de estado que el schema de Sprint realmente puede producir hoy
+// (ver IssueStatusSchema) -- usado solo por template-resumen-v3 para no
+// mostrar en el donut "Resultado" las 4 categorias estilo Linear (Triage,
+// Bloqueado, Duplicado, Backlog) que siempre estan en 0 porque el schema no
+// las soporta. resumen-v2 sigue mostrando las 9 sin cambios.
+const ESTADO_DONUT_KEYS_V3 = ["Todo", "En progreso", "En revisión", "Completado", "Cancelado"];
+
 // Calcula % de issues Done y su estado sobre un subconjunto de issues (planeados
 // o agregados). Grupo vacio => 0% / EN RIESGO.
 function calcularKpiCompletado(issues: { status: string }[]) {
@@ -196,33 +297,64 @@ function aTituloCase(texto: string): string {
     .join(" ");
 }
 
-function construirGradiente(
-  segmentos: { color: string; valor: number }[],
-  total: number,
-): string {
-  if (total <= 0) {
-    return "conic-gradient(#e3e7ef 0% 100%)";
-  }
-  let acumulado = 0;
-  const partes = segmentos
-    .filter((seg) => seg.valor > 0)
-    .map((seg) => {
-      const inicio = (acumulado / total) * 100;
-      acumulado += seg.valor;
-      const fin = (acumulado / total) * 100;
-      return `${seg.color} ${inicio}% ${fin}%`;
-    });
-  return `conic-gradient(${partes.join(", ")})`;
+// Compone un bloque "horas" (total formateado, segmentos con pct/color, y el
+// KPI de horas reales/planeadas del segmento "Proyectos") -- reusado tanto
+// para el bloque del documento como para el de cada member (ver SprintSchema).
+function construirBloqueHoras(
+  segmentos: { nombre: string; horas: number; horasPlaneadas?: number }[],
+) {
+  const totalHoras = segmentos.reduce((suma, segmento) => suma + segmento.horas, 0);
+  const segmentosCompuestos = segmentos.map((segmento, indice) => {
+    const tienePlaneadas = segmento.horasPlaneadas !== undefined;
+    return {
+      nombre: segmento.nombre,
+      horas: formatearHoras(segmento.horas),
+      // Horas planeadas de ESTE segmento, para mostrar "planeadas -> reales" en la
+      // seccion de desviacion. Las llena la integracion (n8n desde el Sheet), no la
+      // IA: reuniones e incidencias son fijas por persona y Proyectos es el resto
+      // hasta la capacidad semanal (40/32). null si el segmento no trae planeadas.
+      horasPlaneadas: tienePlaneadas ? formatearHoras(segmento.horasPlaneadas!) : null,
+      tienePlaneadas,
+      pct: totalHoras > 0 ? Math.round((segmento.horas / totalHoras) * 100) : 0,
+      color: COLORES_HORAS[indice % COLORES_HORAS.length],
+      mostrarPct: indice === 0,
+    };
+  });
+  // Solo mostramos el comparativo planeadas-vs-reales si al menos un segmento trae
+  // horasPlaneadas; si no, la leyenda cae al formato anterior (pct + horas reales).
+  const planeadasDisponibles = segmentosCompuestos.some((seg) => seg.tienePlaneadas);
+
+  const segmentoProyectos = segmentos.find((segmento) =>
+    segmento.nombre.toLowerCase().includes("proyecto"),
+  );
+  const kpiDisponible =
+    segmentoProyectos?.horasPlaneadas !== undefined && segmentoProyectos.horasPlaneadas > 0;
+  const porcentaje = kpiDisponible
+    ? Math.round((segmentoProyectos!.horas / segmentoProyectos!.horasPlaneadas!) * 100)
+    : 0;
+  const kpi = resolverEstadoGlobal(porcentaje);
+
+  return {
+    total: formatearHoras(totalHoras),
+    segmentos: segmentosCompuestos,
+    planeadasDisponibles,
+    kpiDisponible,
+    porcentaje,
+    estadoSprint: kpi.estado,
+    estadoColor: kpi.color,
+    estadoBg: kpi.bg,
+  };
 }
 
 export const SPRINT_SYSTEM_PROMPT = `Eres un extractor de datos para resumen de Sprint v2. Recibes Markdown de un sprint y debes devolver solo un objeto estructurado para el esquema indicado.
 
 Reglas:
 - Identifica sprintName, dateStart, dateEnd y weekNumber desde el documento. Usa strings cortos. sprintName debe incluir el año al final, por ejemplo "1 JUNIO-JULIO 2026".
-- El documento incluye un campo "tiempoVerbal" (Futuro o Pasado) que indica en que tiempo verbal debes redactar TODO el texto narrativo (el "objetivo" de cada member, equipo.quien/cuando/donde/como, riesgoTransversal.texto/mitigacion y desviaciones.logrado/motivo). Si es "Pasado", escribe como si el sprint ya hubiera ocurrido ("se implemento", "se resolvio", "se trabajo en"). Si es "Futuro", escribe en futuro o presente proyectivo, como si el sprint todavia no ocurriera y se estuviera planificando ("se implementara", "se resolvera", "se trabajara en").
+- El documento incluye un campo "tiempoVerbal" (Futuro o Pasado) que indica en que tiempo verbal debes redactar TODO el texto narrativo (el "objetivo" y "desviaciones.logrado/motivo" de cada member, equipo.quien/cuando/donde/como y riesgoTransversal.texto/mitigacion). Si es "Pasado", escribe como si el sprint ya hubiera ocurrido ("se implemento", "se resolvio", "se trabajo en"). Si es "Futuro", escribe en futuro o presente proyectivo, como si el sprint todavia no ocurriera y se estuviera planificando ("se implementara", "se resolvera", "se trabajara en").
 - Agrupa el trabajo por members, luego por projects, luego por issues.
-- Cada issue puede incluir, ademas del titulo, una "Descripcion" y una lista de "Comentarios" tomados de Linear: usalos como fuente principal de contexto real (que se hizo o se planea hacer, que se decidio, que bloqueos hubo) al redactar objetivo/equipo/riesgoTransversal/desviaciones. No te bases solo en el titulo del issue si hay descripcion o comentarios disponibles.
+- Cada issue puede incluir, ademas del titulo, una "Descripcion" y una lista de "Comentarios" tomados de Linear: usalos como fuente principal de contexto real (que se hizo o se planea hacer, que se decidio, que bloqueos hubo) al redactar objetivo/desviaciones/equipo/riesgoTransversal. No te bases solo en el titulo del issue si hay descripcion o comentarios disponibles.
 - Cada member debe tener ademas un campo "objetivo": un resumen, en lenguaje simple, de en que se enfoco esa persona durante el sprint. Debe tener EXACTAMENTE entre 480 y 500 caracteres, contando espacios. Si el contenido disponible es mas corto, amplialo con detalle real del documento (no relleno generico) hasta llegar al rango; si es mas largo, resume sin perder los puntos mas importantes hasta caer dentro del rango.
+- Cada member debe tener tambien un bloque "desviaciones" (usado en el resumen final del sprint) propio de ESA persona, no del sprint completo, con: logrado (respuesta transparente a "esta persona logro lo que tenia planificado?": si o no y por que, comparando SUS issues planeados con lo que realmente completo, lenguaje simple, 180-230 caracteres) y motivo (justifica el desfase de horas planeadas vs reales en relacion con los issues logrados: por que se le agregaron issues no planeados y/o le quedaron planeados sin completar, y como eso explica que dedicara mas o menos horas a Proyectos de lo planeado; 100-140 caracteres). El objetivo es explicar las desviaciones de alcance y de horas de esa persona, no medir si trabajo o no. Las horas planeadas por persona son fijas cada semana: 3.5h de reuniones y 3h de incidencias, y Proyectos es el resto de su capacidad (personalizaciones solo si la semana las incluye); si sus horas reales de Proyectos difieren de las planeadas, di que lo causo (p.ej. incidencias o issues agregados que consumieron tiempo). Basate en los issues de ESE member con agregado=false vs agregado=true y sus estados; si el documento no lo menciona explicitamente, infierelo de ese conteo.
 - Cada issue debe tener title, type, priority, status y agregado.
 - type solo puede ser Bug, Feature o Improvement.
 - priority solo puede ser Urgent, High, Medium o Low.
@@ -231,11 +363,12 @@ Reglas:
 - Usa initials de 2 a 3 letras en mayusculas.
 - Ademas, devuelve un bloque "equipo" con: quien (quien ejecuta el sprint, menciona solo a los miembros con trabajo asignado, 60-90 caracteres), cuando (ventana de tiempo del sprint, 30-50 caracteres), donde (entornos y canales donde corre el trabajo, 50-80 caracteres) y como (stack tecnico usado, 40-70 caracteres).
 - Y un bloque "riesgoTransversal" con: texto (el riesgo que afecta a todo el sprint a la vez, en lenguaje simple sin jerga tecnica, 180-230 caracteres) y mitigacion (como se mitiga ese riesgo, 100-140 caracteres).
-- Y un bloque "desviaciones" (usado en el resumen final del sprint, donde el riesgo ya no aplica porque el sprint cerro) con: logrado (respuesta transparente a "se logro lo planificado?": si o no y por que, comparando lo planeado con lo realmente hecho, lenguaje simple, 180-230 caracteres) y motivo (por que se agregaron issues no planeados y/o por que quedaron planeados sin completar, 100-140 caracteres). El objetivo es explicar las desviaciones de alcance, no medir si el equipo trabajo. Si el documento no lo menciona, infierelo del conteo de issues planeados (agregado=false) vs agregados (agregado=true) y de sus estados.
 - Si el documento no menciona explicitamente el equipo o el riesgo transversal, infierelos a partir del conjunto de members y projects de la forma mas razonable y concreta posible, respetando los mismos rangos de caracteres.
 - "porcentajeCompletado": numero entero de 0 a 100, el porcentaje de issues con status Done sobre el total de issues del sprint.
 - "estadoSprint": resultado del sprint segun porcentajeCompletado. Solo dos valores posibles: CUMPLIDO si es 90 o mas, NO CUMPLIDO si es menor a 90.
 - "horas": un bloque con "segmentos" (array), cada uno con "nombre" y "horas" (numero). Esto es la distribucion de tiempo del equipo, NO se extrae normalmente del documento de issues. Salvo que el documento indique explicitamente otra distribucion, usa siempre estos 3 segmentos por defecto: {"nombre":"Proyectos (3 objetivos)","horas":94.4}, {"nombre":"Reuniones","horas":9.6}, {"nombre":"Incidencias","horas":16}. (Personalizaciones y Team building estan ocultos temporalmente: sus horas ya se redistribuyeron proporcionalmente en Proyectos e Incidencias; no los incluyas salvo que el documento los mencione explicitamente).
+- "horasPlaneadas" (opcional, puede venir en cualquier segmento): son las horas que se habian planeado para ese segmento (reuniones e incidencias son fijas por persona, Proyectos es el resto de la capacidad). NO lo completes: lo agrega la integracion (n8n desde el Sheet) despues de la extraccion, no se infiere del markdown.
+- Cada member puede tener opcionalmente un bloque "horas" con el mismo formato que el "horas" del documento (segmentos con nombre/horas/horasPlaneadas), pero con las horas dedicadas por ESA persona. NO lo completes salvo que el documento lo indique explicitamente: igual que horasPlaneadas, normalmente se agrega despues a mano o por integracion.
 - No agregues datos que no esten en el documento; si un estado o prioridad no aparece, infiere el valor mas prudente desde el contexto.`;
 
 export function componerDatosSprint(datosExtraidos: SprintData) {
@@ -272,7 +405,22 @@ export function componerDatosSprint(datosExtraidos: SprintData) {
         (issue) => STATUS_TO_BUCKET[issue.status] === cfg.key,
       ).length,
     }));
+    // Version sin las categorias siempre-en-0 (ver ESTADO_DONUT_KEYS_V3) -- solo
+    // la usa template-resumen-v3.
+    const estadoConteosV3 = estadoConteos.filter((cfg) =>
+      ESTADO_DONUT_KEYS_V3.includes(cfg.key),
+    );
+    // Issues que estaban planeados (agregado=false) y no llegaron a Done al
+    // cierre del sprint -- dato retrospectivo, no requiere campo nuevo en el
+    // schema. Cancelled queda afuera: cancelar es una decision explicita, no
+    // un pendiente sin resolver. Solo lo usa template-resumen-v3.
+    const vencidos = allIssues.filter(
+      (issue) => !issue.agregado && issue.status !== "Done" && issue.status !== "Cancelled",
+    );
     const paleta = asignarPaleta(indice);
+    const horasMiembro = member.horas
+      ? construirBloqueHoras(member.horas.segmentos)
+      : undefined;
 
     return {
       ...member,
@@ -283,6 +431,8 @@ export function componerDatosSprint(datosExtraidos: SprintData) {
       totalIssues,
       projectCount: projects.length,
       projects,
+      vencidos,
+      horas: horasMiembro,
       icono: paleta.icono,
       colorAccent: paleta.colorAccent,
       colorBgIcon: paleta.colorBgIcon,
@@ -299,6 +449,7 @@ export function componerDatosSprint(datosExtraidos: SprintData) {
         totalIssues,
       ),
       estadoConteos,
+      estadoConteosV3,
       estadoGradient: construirGradiente(
         estadoConteos.map((cfg) => ({ color: cfg.color, valor: cfg.valor })),
         totalIssues,
@@ -306,20 +457,9 @@ export function componerDatosSprint(datosExtraidos: SprintData) {
     };
   });
 
-  const totalHoras = datosExtraidos.horas.segmentos.reduce(
-    (suma, segmento) => suma + segmento.horas,
-    0,
-  );
-  const horas = {
-    total: formatearHoras(totalHoras),
-    segmentos: datosExtraidos.horas.segmentos.map((segmento, indice) => ({
-      nombre: segmento.nombre,
-      horas: formatearHoras(segmento.horas),
-      pct: totalHoras > 0 ? Math.round((segmento.horas / totalHoras) * 100) : 0,
-      color: COLORES_HORAS[indice % COLORES_HORAS.length],
-      mostrarPct: indice === 0,
-    })),
-  };
+  // Bloque de horas del documento (equipo completo); incluye el KPI de horas
+  // reales/planeadas del segmento "Proyectos" si el documento trae horasPlaneadas.
+  const horas = construirBloqueHoras(datosExtraidos.horas.segmentos);
 
   // KPIs a nivel documento para template-resumen-v2: dos porcentajes/estados
   // independientes calculados sobre todos los issues del sprint segun `agregado`.
@@ -340,6 +480,78 @@ export function componerDatosSprint(datosExtraidos: SprintData) {
     planeadosTotal > 0 ? Math.round((totalDone / planeadosTotal) * 100) : 0;
   const globalKpi = resolverEstadoGlobal(globalPorcentaje);
 
+  // Semaforos unificados (ÓPTIMO/ACEPTABLE/DESVIADO) de Planeados/Agregados y
+  // salud general del sprint -- exclusivos de template-resumen-v3 (ver
+  // resolverEstadoCompletado). El resto de campos de arriba (planEstadoSprint,
+  // agregadoEstadoSprint, etc., vocabulario CUMPLIDO/NO CUMPLIDO) se quedan
+  // sin cambios para resumen/resumen-v2.
+  const planKpiV3 = resolverEstadoCompletado(planKpi.porcentaje);
+  const agregadoKpiV3 = resolverEstadoCompletado(agregadoKpi.porcentaje);
+  const estadosParaSalud = [planKpiV3.estado, agregadoKpiV3.estado, globalKpi.estado];
+  if (horas.kpiDisponible) estadosParaSalud.push(horas.estadoSprint);
+  const saludEstado = estadosParaSalud.reduce((peor, actual) =>
+    SEVERIDAD_ESTADO[actual] > SEVERIDAD_ESTADO[peor] ? actual : peor,
+  ) as keyof typeof ESTADO_GLOBAL_CFG;
+  const saludCfg = ESTADO_GLOBAL_CFG[saludEstado];
+
+  // Tendencia + proyeccion (Fase 3, exclusivo de template-resumen-v3): lee el
+  // historico local (backend/data/sprint-historico.json, ver historico.ts) --
+  // solo lectura, nunca escribe, asi que es seguro tambien para /preview. Se
+  // excluye el sprint actual del historico por si ya estaba registrado (evita
+  // que se compare contra si mismo). No hay pronostico de "fecha de cierre de
+  // la epica": el schema de Sprint no trackea alcance total de la epica, asi
+  // que la proyeccion es solo tendencia del % global contra el promedio de los
+  // ultimos sprints, no una fecha estimada de entrega.
+  const historicoPrevio = leerHistorico()
+    .filter(
+      (h) =>
+        !(h.sprintName === datosExtraidos.sprintName && h.weekNumber === datosExtraidos.weekNumber),
+    )
+    .sort((a, b) => a.registradoEn.localeCompare(b.registradoEn))
+    .slice(-3);
+  const tendenciaDisponible = historicoPrevio.length > 0;
+  const tendencia = [
+    ...historicoPrevio.map((entrada) => ({
+      weekNumber: entrada.weekNumber,
+      globalPorcentaje: entrada.globalPorcentaje,
+      ...resolverEstadoGlobal(entrada.globalPorcentaje),
+      esActual: false,
+    })),
+    {
+      weekNumber: datosExtraidos.weekNumber,
+      globalPorcentaje,
+      ...globalKpi,
+      esActual: true,
+    },
+  ];
+  let proyeccion:
+    | { promedioGlobal: number; direccion: string; color: string; bg: string }
+    | undefined;
+  if (tendenciaDisponible) {
+    const promedioGlobal = Math.round(
+      historicoPrevio.reduce((suma, entrada) => suma + entrada.globalPorcentaje, 0) /
+        historicoPrevio.length,
+    );
+    const diferencia = globalPorcentaje - promedioGlobal;
+    let direccion: string;
+    let colorDireccion: string;
+    let bgDireccion: string;
+    if (diferencia > 5) {
+      direccion = "MEJORANDO";
+      colorDireccion = ESTADO_GLOBAL_CFG.ÓPTIMO.color;
+      bgDireccion = ESTADO_GLOBAL_CFG.ÓPTIMO.bg;
+    } else if (diferencia < -5) {
+      direccion = "EMPEORANDO";
+      colorDireccion = ESTADO_GLOBAL_CFG.DESVIADO.color;
+      bgDireccion = ESTADO_GLOBAL_CFG.DESVIADO.bg;
+    } else {
+      direccion = "ESTABLE";
+      colorDireccion = ESTADO_GLOBAL_CFG.ACEPTABLE.color;
+      bgDireccion = ESTADO_GLOBAL_CFG.ACEPTABLE.bg;
+    }
+    proyeccion = { promedioGlobal, direccion, color: colorDireccion, bg: bgDireccion };
+  }
+
   return {
     ...datosExtraidos,
     horas,
@@ -349,14 +561,26 @@ export function componerDatosSprint(datosExtraidos: SprintData) {
     planEstadoSprint: planKpi.estado,
     planEstadoColor: planKpi.color,
     planEstadoBg: planKpi.bg,
+    planEstadoV3: planKpiV3.estado,
+    planEstadoColorV3: planKpiV3.color,
+    planEstadoBgV3: planKpiV3.bg,
     agregadoPorcentajeCompletado: agregadoKpi.porcentaje,
     agregadoEstadoSprint: agregadoKpi.estado,
     agregadoEstadoColor: agregadoKpi.color,
     agregadoEstadoBg: agregadoKpi.bg,
+    agregadoEstadoV3: agregadoKpiV3.estado,
+    agregadoEstadoColorV3: agregadoKpiV3.color,
+    agregadoEstadoBgV3: agregadoKpiV3.bg,
     globalPorcentaje: globalPorcentaje,
     globalEstadoSprint: globalKpi.estado,
     globalEstadoColor: globalKpi.color,
     globalEstadoBg: globalKpi.bg,
+    saludEstado,
+    saludColor: saludCfg.color,
+    saludBg: saludCfg.bg,
+    tendenciaDisponible,
+    tendencia,
+    proyeccion,
     typeLegend: [
       { label: "Bug", icon: TYPE_CFG.Bug.icon, color: TYPE_CFG.Bug.color, bg: TYPE_CFG.Bug.bg },
       { label: "Feature", icon: TYPE_CFG.Feature.icon, color: TYPE_CFG.Feature.color, bg: TYPE_CFG.Feature.bg },
@@ -385,6 +609,10 @@ export const sprintConfig: DocumentConfig<SprintData> = {
     },
     "resumen-v2": {
       path: path.join(__dirname, "template-resumen-v2.html"),
+      pdf: { width: "1240px", height: "1050px" },
+    },
+    "resumen-v3": {
+      path: path.join(__dirname, "template-resumen-v3.html"),
       pdf: { width: "1240px", height: "1050px" },
     },
   },

@@ -4,6 +4,7 @@ import cors from "cors";
 import multer from "multer";
 import path from "path";
 import { documentRouter, sendError, apiKeyAuth } from "./api/document.routes";
+import { sprintHistoricoRouter } from "./documents/sprint/historico.routes";
 import { closeBrowser } from "./core/generators/pdf.generator";
 
 if (!process.env.OPENAI_API_KEY) {
@@ -59,6 +60,7 @@ app.use(express.json({ limit: "2mb" }));
 // caller no autenticado cuando la instancia esta expuesta publicamente.
 app.use("/api", apiKeyAuth);
 app.use("/api/:docType/extraer", upload.single("archivo"));
+app.use("/api", sprintHistoricoRouter);
 app.use("/api", documentRouter);
 app.get("/.well-known/appspecific/com.chrome.devtools.json", (_req, res) => {
   res.sendStatus(204);

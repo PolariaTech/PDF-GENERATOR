@@ -149,3 +149,25 @@ export const PALETAS: Paleta[] = [
 export function asignarPaleta(indice: number): Paleta {
   return PALETAS[indice % PALETAS.length];
 }
+
+// Arma el string conic-gradient para un donut a partir de segmentos
+// {color, valor}. Compartido entre sprint (planeados/agregados, por estado) y
+// epica (sprints cumplidos/no cumplidos del ciclo) para no duplicar la logica.
+export function construirGradiente(
+  segmentos: { color: string; valor: number }[],
+  total: number,
+): string {
+  if (total <= 0) {
+    return "conic-gradient(#e3e7ef 0% 100%)";
+  }
+  let acumulado = 0;
+  const partes = segmentos
+    .filter((seg) => seg.valor > 0)
+    .map((seg) => {
+      const inicio = (acumulado / total) * 100;
+      acumulado += seg.valor;
+      const fin = (acumulado / total) * 100;
+      return `${seg.color} ${inicio}% ${fin}%`;
+    });
+  return `conic-gradient(${partes.join(", ")})`;
+}

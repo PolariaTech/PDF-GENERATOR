@@ -1,7 +1,7 @@
 import { EpicaData } from "./config";
 
 export const epicaSampleData: EpicaData = {
-  periodo: "JUNIO-JULIO",
+  periodo: "JUNIO-JULIO 2026",
   fechaInicio: "22 JUN",
   fechaFin: "20 JUL",
   duracion: "4 SEMANAS",
@@ -19,6 +19,14 @@ export const epicaSampleData: EpicaData = {
         "El 100% de los módulos operativos en producción, con un flujo de trabajo completo y sin conflictos en el manejo de datos de inventario.",
       riesgo:
         "El principal riesgo es no lograr el despliegue completo de los módulos, lo que podría afectar la operación de la bodega fría y generar retrasos en el servicio.",
+      cumplimiento:
+        "Se completaron todos los módulos planeados y se sumaron 2 tareas adicionales de migración de datos que no estaban previstas, sin dejar pendientes de este mes.",
+      sprints: [
+        { nombre: "Sprint 1", estado: "CUMPLIDO" },
+        { nombre: "Sprint 2", estado: "CUMPLIDO" },
+        { nombre: "Sprint 3", estado: "CUMPLIDO" },
+        { nombre: "Sprint 4", estado: "CUMPLIDO" },
+      ],
     },
     {
       nombreCorto: "Mateo v2.0",
@@ -33,6 +41,14 @@ export const epicaSampleData: EpicaData = {
         "Obtener respuestas exactas y naturales en WhatsApp sobre Kardex, inventarios, compras y ventas, mejorando la experiencia del usuario.",
       riesgo:
         "El riesgo principal es no alcanzar la precisión deseada en las respuestas, lo que podría llevar a confusiones y decisiones erróneas por parte de los usuarios.",
+      cumplimiento:
+        "Se conectaron 5 de las 6 vistas planeadas; la vista de compras quedó pendiente para el próximo periodo por un bloqueo en la fuente de datos.",
+      sprints: [
+        { nombre: "Sprint 1", estado: "CUMPLIDO" },
+        { nombre: "Sprint 2", estado: "NO CUMPLIDO" },
+        { nombre: "Sprint 3", estado: "CUMPLIDO" },
+        { nombre: "Sprint 4", estado: "NO CUMPLIDO" },
+      ],
     },
     {
       nombreCorto: "Mateo Support v1.2",
@@ -47,6 +63,14 @@ export const epicaSampleData: EpicaData = {
         "Mateo Support operando en producción, gestionando tickets y consultas de manera autónoma y eficiente, mejorando el soporte al usuario.",
       riesgo:
         "El riesgo principal es que los módulos no funcionen como se espera, lo que podría generar una carga adicional en el equipo de soporte y desorganización en la gestión de tickets.",
+      cumplimiento:
+        "Los 3 módulos quedaron en producción como se planeó, y además se resolvieron 3 tickets urgentes que surgieron durante el mes fuera del plan inicial.",
+      sprints: [
+        { nombre: "Sprint 1", estado: "CUMPLIDO" },
+        { nombre: "Sprint 2", estado: "CUMPLIDO" },
+        { nombre: "Sprint 3", estado: "NO CUMPLIDO" },
+        { nombre: "Sprint 4", estado: "CUMPLIDO" },
+      ],
     },
   ],
   equipo: {
@@ -62,4 +86,6 @@ export const epicaSampleData: EpicaData = {
     mitigacion:
       "Se mitigará este riesgo estableciendo revisiones periódicas del avance de cada épica y priorizando las tareas críticas para asegurar el cumplimiento de los plazos.",
   },
+  riesgoTransversalResultado:
+    "El riesgo no se materializó: las 3 épicas cerraron dentro de la ventana planeada, con solo la vista de compras de Mateo v2.0 pasando al siguiente periodo.",
 };
