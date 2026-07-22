@@ -506,11 +506,25 @@ export function componerDatosSprint(datosExtraidos: SprintData) {
   const agregadosCompletados = todosLosIssues.filter(
     (issue) => issue.agregado && issue.status === "Done",
   ).length;
-  const resumenNumericoCierre = `El equipo completó ${planeadosCompletados} de los ${planeadosTotal} issue${planeadosTotal === 1 ? "" : "s"} planeado${planeadosTotal === 1 ? "" : "s"}${
-    agregadosTotalCount > 0
-      ? ` y sumó ${agregadosTotalCount} issue${agregadosTotalCount === 1 ? "" : "s"} agregado${agregadosTotalCount === 1 ? "" : "s"}, de los cuales completó ${agregadosCompletados}`
-      : ""
-  }.`;
+  const planeadosPlural = planeadosTotal === 1 ? "" : "s";
+  const partePlaneados =
+    planeadosCompletados === planeadosTotal
+      ? `completó todos los ${planeadosTotal} issue${planeadosPlural} planeado${planeadosPlural}`
+      : `completó ${planeadosCompletados} de los ${planeadosTotal} issue${planeadosPlural} planeado${planeadosPlural}`;
+
+  let parteAgregados = "";
+  if (agregadosTotalCount > 0) {
+    const agregadosPlural = agregadosTotalCount === 1 ? "" : "s";
+    if (agregadosCompletados === agregadosTotalCount) {
+      parteAgregados =
+        agregadosTotalCount === 1
+          ? " y, gracias al avance más rápido de lo esperado, sumó 1 issue agregado, el cual también fue completado"
+          : ` y, gracias al avance más rápido de lo esperado, sumó ${agregadosTotalCount} issues agregados, los cuales también fueron completados`;
+    } else {
+      parteAgregados = ` y, gracias al avance más rápido de lo esperado, sumó ${agregadosTotalCount} issue${agregadosPlural} agregado${agregadosPlural}, de los cuales completó ${agregadosCompletados}`;
+    }
+  }
+  const resumenNumericoCierre = `El equipo ${partePlaneados}${parteAgregados}.`;
   const riesgoTransversalResultado = datosExtraidos.riesgoTransversalResultado
     ? `${datosExtraidos.riesgoTransversalResultado} ${resumenNumericoCierre}`
     : datosExtraidos.riesgoTransversalResultado;
