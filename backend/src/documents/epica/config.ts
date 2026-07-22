@@ -25,11 +25,11 @@ const EpicaItemSchema = z.object({
   // Editable a mano; NO es un % calculado (la formula de cumplimiento global
   // todavia no la aprueba el equipo administrativo, ver memoria
   // sprint_kpi_global -- misma decision aplica aqui).
-  cumplimiento: z.string().max(320).optional(),
+  cumplimiento: z.string().max(320).nullable().optional(),
   // Solo se llena en el flujo de CIERRE: los sprints que compusieron el ciclo
   // de esta epica y si cada uno se cumplio o no. Alimenta el donut de
   // "Sprints del ciclo" en template-cierre.html.
-  sprints: z.array(EpicaSprintSchema).optional(),
+  sprints: z.array(EpicaSprintSchema).nullable().optional(),
 });
 
 export const EpicaSchema = z.object({
@@ -50,7 +50,7 @@ export const EpicaSchema = z.object({
   }),
   // Solo se llena en el flujo de CIERRE: si el riesgo transversal previsto en
   // el resumen de inicio se materializo o no, y que paso. Editable a mano.
-  riesgoTransversalResultado: z.string().max(260).optional(),
+  riesgoTransversalResultado: z.string().max(260).nullable().optional(),
 });
 
 export type EpicaData = z.infer<typeof EpicaSchema>;

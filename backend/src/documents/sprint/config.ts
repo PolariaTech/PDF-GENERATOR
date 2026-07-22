@@ -31,15 +31,24 @@ export const IssueStatusSchema = z.enum([
 
 // Mismo shape para el bloque de horas del documento (equipo completo) y el de
 // cada member (horas individuales) -- ver construirBloqueHoras().
-const HorasSegmentoSchema = z.object({
-  nombre: z.string(),
-  horas: z.number().nonnegative(),
-  // Solo aplica al segmento "Proyectos (3 objetivos)": horas que se habian
-  // planeado para Proyectos al inicio del sprint (documento: copiadas del
-  // resumen-inicio del mismo sprint; member: la porcion de esa persona).
-  // No lo llena la IA -- ver SPRINT_SYSTEM_PROMPT.
-  horasPlaneadas: z.number().nonnegative().optional(),
-});
+// Factory (no una instancia compartida): zodResponseFormat hoistea a $ref
+// cualquier schema Zod reutilizado por identidad, y esa dedupe rompe la
+// conversion a JSON Schema cuando el schema reutilizado tiene un campo
+// nullable/optional (produce un $ref auto-referenciado que OpenAI rechaza
+// con "Invalid schema for response_format"). Cada llamada crea una instancia
+// nueva para que el documento y cada member obtengan definiciones inline
+// independientes.
+function crearHorasSegmentoSchema() {
+  return z.object({
+    nombre: z.string(),
+    horas: z.number().nonnegative(),
+    // Solo aplica al segmento "Proyectos (3 objetivos)": horas que se habian
+    // planeado para Proyectos al inicio del sprint (documento: copiadas del
+    // resumen-inicio del mismo sprint; member: la porcion de esa persona).
+    // No lo llena la IA -- ver SPRINT_SYSTEM_PROMPT.
+    horasPlaneadas: z.number().nonnegative().nullable().optional(),
+  });
+}
 
 export const SprintSchema = z.object({
   sprintName: z.string().toUpperCase(),
@@ -49,7 +58,7 @@ export const SprintSchema = z.object({
   estadoSprint: z.enum(["CUMPLIDO", "NO CUMPLIDO"]),
   porcentajeCompletado: z.number().min(0).max(100),
   horas: z.object({
-    segmentos: z.array(HorasSegmentoSchema).min(1),
+    segmentos: z.array(crearHorasSegmentoSchema()).min(1),
   }),
   members: z.array(
     z.object({
@@ -74,8 +83,9 @@ export const SprintSchema = z.object({
       // aqui, porque requiere comparar entre members.
       horas: z
         .object({
-          segmentos: z.array(HorasSegmentoSchema).min(1),
+          segmentos: z.array(crearHorasSegmentoSchema()).min(1),
         })
+        .nullable()
         .optional(),
       projects: z.array(
         z.object({
@@ -106,7 +116,7 @@ export const SprintSchema = z.object({
   // Solo se llena en el flujo de CIERRE (template-resumen-v2): si el riesgo
   // transversal previsto en resumen-inicio se materializo o no, y que paso.
   // Editable a mano. Mismo patron que epica (ver epica/config.ts).
-  riesgoTransversalResultado: z.string().max(260).optional(),
+  riesgoTransversalResultado: z.string().max(260).nullable().optional(),
 }).superRefine((datos, ctx) => {
   const totalesPorMiembro = datos.members
     .map((member, indice) => ({
@@ -305,11 +315,11 @@ function aTituloCase(texto: string): string {
 // KPI de horas reales/planeadas del segmento "Proyectos") -- reusado tanto
 // para el bloque del documento como para el de cada member (ver SprintSchema).
 function construirBloqueHoras(
-  segmentos: { nombre: string; horas: number; horasPlaneadas?: number }[],
+  segmentos: { nombre: string; horas: number; horasPlaneadas?: number | null }[],
 ) {
   const totalHoras = segmentos.reduce((suma, segmento) => suma + segmento.horas, 0);
   const segmentosCompuestos = segmentos.map((segmento, indice) => {
-    const tienePlaneadas = segmento.horasPlaneadas !== undefined;
+    const tienePlaneadas = segmento.horasPlaneadas != null;
     return {
       nombre: segmento.nombre,
       horas: formatearHoras(segmento.horas),
@@ -332,7 +342,7 @@ function construirBloqueHoras(
     segmento.nombre.toLowerCase().includes("proyecto"),
   );
   const kpiDisponible =
-    segmentoProyectos?.horasPlaneadas !== undefined && segmentoProyectos.horasPlaneadas > 0;
+    segmentoProyectos?.horasPlaneadas != null && segmentoProyectos.horasPlaneadas > 0;
   const porcentaje = kpiDisponible
     ? Math.round((segmentoProyectos!.horas / segmentoProyectos!.horasPlaneadas!) * 100)
     : 0;
