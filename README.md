@@ -144,8 +144,8 @@ npx playwright install chromium
 ```
 Verificar que termina sin errores y volver a intentar la generación del PDF.
 
-**3. `POST /api/sprint/preview` o `POST /api/sprint/pdf` devuelve `400` con `code: "VALIDATION_ERROR"`**
-Causa: el JSON enviado en `body.datos` (o en el body directo) no cumple el schema Zod del tipo de documento (`EpicaSchema` o `SprintSchema`) — por ejemplo, falta un campo obligatorio, un `status` de issue con un valor fuera de `Todo/In Progress/In Review/Done/Cancelled`, o un texto que excede el máximo de caracteres del campo.
+**3. `POST /api/sprint-fin/preview` o `POST /api/sprint-fin/pdf` devuelve `400` con `code: "VALIDATION_ERROR"`**
+Causa: el JSON enviado en `body.datos` (o en el body directo) no cumple el schema Zod del tipo de documento (`EpicaSchema`, `SprintInicioSchema` o `SprintSchema` de `sprint-fin`) — por ejemplo, falta un campo obligatorio, un `status` de issue con un valor fuera de `Todo/In Progress/In Review/Done/Cancelled`, o un texto que excede el rango de caracteres del campo.
 Solución: revisar el campo `details` de la respuesta (es el `.flatten()` de Zod: indica exactamente qué campo falló y por qué) y corregir ese campo en el JSON antes de reintentar. El JSON extraído por la IA siempre es editable en el frontend antes de generar el PDF.
 
 **4. `EADDRINUSE: address already in use :::3001` al correr `npm run dev`**

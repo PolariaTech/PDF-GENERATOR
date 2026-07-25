@@ -166,7 +166,7 @@ Resultado esperado: HTML de vuelta, no un 500.
 - El mensaje de error que aparece en el log es literalmente: `Timeout de 15000ms superado en page.pdf()` (o el timeout propio de `setContent`, que Playwright reporta con su propio formato).
 
 ### Síntoma en logs
-`Error en /api/sprint/pdf: Error: Timeout de 15000ms superado en page.pdf()` (o similar para `setContent`), seguido de la respuesta `500 INTERNAL_ERROR` al cliente.
+`Error en /api/sprint-fin/pdf: Error: Timeout de 15000ms superado en page.pdf()` (o similar para `setContent`), seguido de la respuesta `500 INTERNAL_ERROR` al cliente.
 
 ### Diagnóstico: ¿esperado o problema real?
 
@@ -188,7 +188,7 @@ No subir `RENDER_TIMEOUT_MS` como primera reacción sin antes revisar si el patr
 ## 5. Checklist mínimo antes de exponer el backend públicamente (túnel o deploy para n8n)
 
 **Objetivo**: no exponer una URL pública del backend sin autenticación mínima.
-**Cuándo usarlo**: antes de levantar un túnel (Cloudflare Tunnel, ngrok, etc.) o un deploy real que le dé al backend una URL alcanzable desde internet — el caso concreto hoy es el workflow de n8n en la nube descrito en `docs/planning/PLAN-N8N-SPRINT-WORKFLOW.md`, que necesita llamar a `POST /api/sprint/pdf` desde fuera de la red local.
+**Cuándo usarlo**: antes de levantar un túnel (Cloudflare Tunnel, ngrok, etc.) o un deploy real que le dé al backend una URL alcanzable desde internet — el caso concreto hoy es el workflow de n8n en la nube descrito en `docs/planning/PLAN-N8N-SPRINT-WORKFLOW.md`, que necesita llamar a `POST /api/sprint-fin/pdf` desde fuera de la red local.
 
 > **Estado actual: esto todavía NO está implementado como despliegue real.** El middleware de auth (`apiKeyAuth` en `backend/src/api/document.routes.ts`, líneas 55-75) ya existe en el código y es condicional: si `API_KEY` no está definida en `.env`, no valida nada (deja pasar todo, que es el comportamiento actual en local). Este checklist es lo mínimo que hay que hacer **antes** de que ese backend sea alcanzable desde internet — no antes de simplemente correrlo en local.
 
@@ -199,17 +199,17 @@ No subir `RENDER_TIMEOUT_MS` como primera reacción sin antes revisar si el patr
 
 2. **Confirmar que el middleware bloquea sin el header correcto.**
    ```bash
-   curl -i https://<url-publica>/api/sprint/sample-preview
+   curl -i https://<url-publica>/api/sprint-fin/sample-preview
    ```
    Resultado esperado: `401` con body `{"success":false,"code":"UNAUTHORIZED","message":"API key invalida o faltante."}`.
 
    ```bash
-   curl -i https://<url-publica>/api/sprint/sample-preview -H "X-API-Key: <valor-correcto>"
+   curl -i https://<url-publica>/api/sprint-fin/sample-preview -H "X-API-Key: <valor-correcto>"
    ```
    Resultado esperado: `200` con HTML.
 
 3. **Configurar el mismo valor de `API_KEY` en el consumidor (n8n).**
-   Según `docs/planning/PLAN-N8N-SPRINT-WORKFLOW.md` (Decisión confirmada #1), el nodo HTTP Request de n8n debe enviar el header `X-API-Key` con ese valor en cada request a `POST /api/sprint/pdf`. Guardarlo como credential/variable de entorno en n8n (`PDF_API_KEY`), nunca hardcodeado en el nodo.
+   Según `docs/planning/PLAN-N8N-SPRINT-WORKFLOW.md` (Decisión confirmada #1), el nodo HTTP Request de n8n debe enviar el header `X-API-Key` con ese valor en cada request a `POST /api/sprint-fin/pdf`. Guardarlo como credential/variable de entorno en n8n (`PDF_API_KEY`), nunca hardcodeado en el nodo.
 
 4. **No reusar la `API_KEY` de un entorno expuesto en el `.env` local/dev.**
    Si en algún momento existe más de un entorno con `API_KEY` definida, cada uno debe tener su propio valor (mismo principio que separar credenciales entre entornos, ver `docs/ENVIRONMENTS.md`).

@@ -15,7 +15,7 @@ La próxima vez que ocurra un cambio de los que `docs/VERSIONING.md` clasifica c
 ```markdown
 ## Migración de vX.x a vY.0 — <descripción corta>
 
-**Impacto**: quién/qué se ve afectado (ej. el workflow de n8n que llama a /api/sprint/pdf).
+**Impacto**: quién/qué se ve afectado (ej. el workflow de n8n que llama a /api/sprint-fin/pdf).
 **Prerrequisitos**: qué debe existir antes de migrar (backups si aplica, versión mínima de algo).
 
 ### Pasos de migración
@@ -28,4 +28,4 @@ La próxima vez que ocurra un cambio de los que `docs/VERSIONING.md` clasifica c
 
 ## Caso más probable de MAJOR a futuro
 
-El caso con más probabilidad real de ocurrir, dado el estado del proyecto: una vez que el workflow de n8n (`docs/planning/PLAN-N8N-SPRINT-WORKFLOW.md`) dependa en producción de `POST /api/sprint/pdf`, cualquier cambio incompatible en `SprintSchema` o en el formato de respuesta de ese endpoint pasa a tener un consumidor externo real que migrar — a partir de ese momento, este documento deja de ser teórico.
+El caso con más probabilidad real de ocurrir, dado el estado del proyecto: una vez que el workflow de n8n (`docs/planning/PLAN-N8N-SPRINT-WORKFLOW.md`) dependa en producción de `POST /api/sprint-fin/pdf`, cualquier cambio incompatible en `SprintSchema` o en el formato de respuesta de ese endpoint pasa a tener un consumidor externo real que migrar — a partir de ese momento, este documento deja de ser teórico.

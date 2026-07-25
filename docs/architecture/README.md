@@ -18,7 +18,7 @@ flowchart TB
     openai[["OpenAI API<br/>(gpt-4o-mini)"]]
 
     equipo -- "HTTPS (navegador)<br/>sube .md, edita JSON, descarga PDF" --> sistema
-    n8n -- "HTTP + JSON, header X-API-Key<br/>POST /api/sprint/pdf<br/>respuesta: PDF binario o JSON de error" --> sistema
+    n8n -- "HTTP + JSON, header X-API-Key<br/>POST /api/sprint-inicio/pdf o /api/sprint-fin/pdf<br/>respuesta: PDF binario o JSON de error" --> sistema
     sistema -- "HTTPS + JSON<br/>chat.completions.parse (structured output)" --> openai
 
     style sistema fill:#0b1430,color:#ffffff,stroke:#0b1430
@@ -27,7 +27,7 @@ flowchart TB
 
 **Notas de la caja negra:**
 - No hay base de datos ni cola de mensajes: el sistema no persiste documentos generados ni estado de sesión entre requests (ver sección 4).
-- El workflow n8n es un actor **externo** al sistema (no un contenedor propio): solo consume el mismo endpoint público `POST /api/sprint/pdf` que cualquier otro cliente HTTP, autenticado con una API key (ver ADR-0005). Su lógica interna (agente de IA, Google Sheets, Google Drive, Linear) vive fuera de este repositorio.
+- El workflow n8n es un actor **externo** al sistema (no un contenedor propio): solo consume los mismos endpoints públicos (`POST /api/sprint-inicio/pdf`, `POST /api/sprint-fin/pdf`, etc.) que cualquier otro cliente HTTP, autenticado con una API key (ver ADR-0005). Su lógica interna (agente de IA, Google Sheets, Google Drive, Linear) vive fuera de este repositorio.
 - Límite de confianza: todo lo que está dentro de la caja "Polaria PDF Generator" corre en el servidor (proceso Node.js); el navegador del equipo interno y el propio n8n están fuera de ese límite de confianza — por eso la comunicación hacia el backend requiere autenticación cuando el backend está expuesto públicamente (ADR-0005).
 
 ## 2. Diagrama de contenedores (C4 Nivel 2)
@@ -54,7 +54,7 @@ flowchart TB
     actor_equipo -- "HTTP GET /<br/>descarga HTML/CSS/JS del sitio" --> frontend
     frontend -- "HTTP + JSON: GET /api/:docType/sample-preview,<br/>POST /api/:docType/preview<br/>HTTP + multipart/form-data (campo 'archivo'):<br/>POST /api/:docType/extraer<br/>HTTP binario (application/pdf):<br/>POST /api/:docType/pdf<br/>fetch() desde el navegador del equipo" --> backend
 
-    actor_n8n -- "HTTP + JSON, header X-API-Key<br/>POST /api/sprint/pdf<br/>body: SprintSchema + plantilla<br/>respuesta: application/pdf<br/>o JSON {success:false, code, message, details}" --> backend
+    actor_n8n -- "HTTP + JSON, header X-API-Key<br/>POST /api/sprint-inicio/pdf o /api/sprint-fin/pdf<br/>body: SprintSchema + plantilla<br/>respuesta: application/pdf<br/>o JSON {success:false, code, message, details}" --> backend
 
     backend -- "HTTPS + JSON<br/>openai.beta.chat.completions.parse<br/>con zodResponseFormat(config.schema)<br/>timeout 30s, maxRetries 2" --> openai
 

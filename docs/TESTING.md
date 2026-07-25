@@ -20,7 +20,7 @@ Para cada uno de los dos tipos de documento (`epica`, `sprint`), verificar los 4
 ### 1. `sample-preview` — sin IA, sin datos de usuario
 
 ```bash
-curl "http://localhost:3001/api/sprint/sample-preview?plantilla=detail"
+curl "http://localhost:3001/api/sprint-fin/sample-preview?plantilla=detail"
 ```
 
 **Resultado esperado**: HTML completo (empieza con `<!DOCTYPE html>` o `<html>`), sin errores. Es la verificación más rápida de que una plantilla renderiza — usa `sample-data.ts`, no depende de OpenAI ni de datos del usuario.
@@ -30,7 +30,7 @@ Repetir para cada plantilla registrada del tipo de documento (`detail`, `resumen
 ### 2. `extraer` — con IA (consume tokens reales de OpenAI)
 
 ```bash
-curl -X POST "http://localhost:3001/api/sprint/extraer" \
+curl -X POST "http://localhost:3001/api/sprint-fin/extraer" \
   -F "archivo=@ruta/a/un/sprint-de-ejemplo.md"
 ```
 
@@ -39,7 +39,7 @@ curl -X POST "http://localhost:3001/api/sprint/extraer" \
 ### 3. `preview` — validación Zod + render sin PDF
 
 ```bash
-curl -X POST "http://localhost:3001/api/sprint/preview" \
+curl -X POST "http://localhost:3001/api/sprint-fin/preview" \
   -H "Content-Type: application/json" \
   -d @datos-editados.json
 ```
@@ -49,7 +49,7 @@ curl -X POST "http://localhost:3001/api/sprint/preview" \
 ### 4. `pdf` — el camino completo, incluyendo Playwright
 
 ```bash
-curl -X POST "http://localhost:3001/api/sprint/pdf" \
+curl -X POST "http://localhost:3001/api/sprint-fin/pdf" \
   -H "Content-Type: application/json" \
   -d @datos-editados.json \
   -o salida.pdf

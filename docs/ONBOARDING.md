@@ -18,7 +18,7 @@ No hay glosario de dominio, ADRs, ni CONTRIBUTING.md en el repo a la fecha de es
 
 Un backend Express + TypeScript que convierte un Markdown en un PDF con diseño oficial de Polaria: OpenAI extrae y estructura el contenido según un schema Zod, el usuario revisa/edita el JSON resultante en un frontend estático, y Playwright (Chromium headless) renderiza el HTML final a PDF.
 
-## 3. Recorrido de una request real: `POST /api/sprint/pdf`
+## 3. Recorrido de una request real: `POST /api/sprint-fin/pdf`
 
 Esta sección sigue el pedido más completo del sistema — generar el PDF de un sprint — desde que entra el HTTP request hasta que sale el binario. Cada paso cita el archivo real.
 
@@ -32,7 +32,7 @@ Esta sección sigue el pedido más completo del sistema — generar el PDF de un
 
 ### 3.2 Ruteo: `backend/src/api/document.routes.ts`
 
-- El request `POST /api/sprint/pdf` cae en la ruta genérica `documentRouter.post("/:docType/pdf", ...)` (líneas 175-209). No hay una ruta específica por tipo de documento — el mismo handler sirve `epica`, `sprint` y cualquier tipo futuro.
+- El request `POST /api/sprint-fin/pdf` cae en la ruta genérica `documentRouter.post("/:docType/pdf", ...)` (líneas 175-209). No hay una ruta específica por tipo de documento — el mismo handler sirve `epica`, `sprint` y cualquier tipo futuro.
 - `getConfigOrRespond("sprint", res)` (línea 77) busca el `DocumentConfig` en el registry (`getDocumentConfig`, ver 3.3); si `docType` no está registrado, responde 404 `NOT_FOUND` sin llegar a tocar OpenAI ni Playwright.
 - `config.schema.safeParse(getPayload(req.body))` valida el JSON del body contra `SprintSchema` (definido en `sprint/config.ts`). `getPayload` (línea 86-88) acepta tanto `{ datos: {...} }` como el objeto directo en la raíz del body. Si la validación falla, responde 400 `VALIDATION_ERROR` con `parsed.error.flatten()` en `details` — nunca llega a renderizar nada.
 - `config.componerDatos(parsed.data)` (línea 194) — para `sprint` esto es `componerDatosSprint`, ver 3.4 — enriquece los datos ya validados con colores, porcentajes y gradientes antes de pasarlos a la plantilla.
@@ -45,7 +45,7 @@ Esta sección sigue el pedido más completo del sistema — generar el PDF de un
 - `types.ts` define la interfaz `DocumentConfig<T>` (schema Zod, `systemPrompt`, `componerDatos()`, `templates: Record<string, DocumentTemplate>`, `defaultTemplate`) y `DocumentTemplate` (`path` + `pdf?.width/height` opcional).
 - `registry.ts` es un mapa plano: `documentRegistry = { epica: epicaConfig, sprint: sprintConfig }` y `documentSamples = { epica: epicaSampleData, sprint: sprintSampleData }`. `getDocumentConfig("sprint")` devuelve `sprintConfig` tal cual está exportado desde `sprint/config.ts`. No hay lógica adicional: agregar un tipo de documento nuevo es agregar una entrada aquí (ver sección 4, "patrón document-type").
 
-### 3.4 `componerDatosSprint` en `backend/src/documents/sprint/config.ts` (líneas 239-364)
+### 3.4 `componerDatosSprint` en `backend/src/documents/sprint-fin/config.ts` (líneas 239-364)
 
 Recibe los datos ya validados por `SprintSchema` y calcula, sin que la plantilla Handlebars tenga que hacer ningún cómputo:
 
@@ -132,7 +132,7 @@ Por qué esta tarea es un buen primer ticket:
 - `backend/src/documents/types.ts`
 - `backend/src/documents/registry.ts`
 - `backend/src/documents/epica/config.ts`
-- `backend/src/documents/sprint/config.ts`
+- `backend/src/documents/sprint-fin/config.ts`
 - `backend/src/core/ai/extractor.service.ts`
 - `backend/src/core/generators/pdf.generator.ts`
 - `backend/src/constants.ts`

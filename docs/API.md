@@ -47,12 +47,15 @@ Toda respuesta de error (cualquier endpoint) tiene esta forma (`ErrorResponseBod
 
 ## El patrón `:docType`
 
-Los 4 endpoints son genéricos: `:docType` es una clave del registro `documentRegistry` (`backend/src/documents/registry.ts`). Hoy hay dos valores válidos:
+Los 4 endpoints son genéricos: `:docType` es una clave del registro `documentRegistry` (`backend/src/documents/registry.ts`). Hoy hay tres valores válidos:
 
 | `docType` | Documento | Plantillas (`plantilla`) |
 |---|---|---|
 | `epica` | Resumen ejecutivo mensual de épicas | `default` (default), `cierre` |
-| `sprint` | Resumen de sprint por miembro → proyecto → issue | `detail` (default), `resumen-inicio`, `resumen`, `resumen-v2`, `resumen-v3` |
+| `sprint-inicio` | Resumen de arranque de sprint por miembro → proyecto → issue, schema mínimo (sin `agregado`/`desviaciones`/`riesgoTransversalResultado`/`estadoSprint`/`porcentajeCompletado`) | `resumen-inicio` (única, default) |
+| `sprint-fin` | Resumen de cierre de sprint por miembro → proyecto → issue, schema completo | `detail` (default), `resumen`, `resumen-v2`, `resumen-v3` |
+
+`sprint-inicio` y `sprint-fin` eran un único `docType` (`sprint`) hasta 2026-07-25 — ver ADR-0008. `/api/sprint/*` ya no existe (responde `404 NOT_FOUND`).
 
 Si `:docType` no está registrado, **los 4 endpoints** responden igual:
 
@@ -81,20 +84,20 @@ El parámetro `plantilla` (query en `sample-preview`, campo `plantilla` en el bo
 
 | Nombre | Tipo | Requerido | Descripción | Ejemplo |
 |---|---|---|---|---|
-| `docType` | string | Sí | Tipo de documento registrado | `sprint` |
+| `docType` | string | Sí | Tipo de documento registrado | `sprint-fin` |
 
 **Parámetros de query**
 
 | Nombre | Tipo | Requerido | Default | Descripción | Ejemplo |
 |---|---|---|---|---|---|
-| `plantilla` | string | No | `config.defaultTemplate` del `docType` (`default` en epica, `detail` en sprint) | Clave de plantilla a renderizar | `resumen` |
+| `plantilla` | string | No | `config.defaultTemplate` del `docType` (`default` en epica, `resumen-inicio` en sprint-inicio, `detail` en sprint-fin) | Clave de plantilla a renderizar | `resumen` |
 
 **Headers requeridos:** ninguno más allá de `X-API-Key` (condicional). No lleva body.
 
 **Respuesta 200 (éxito):** `Content-Type: text/html`, cuerpo = HTML crudo ya renderizado (pensado para cargarse en un `<iframe>`, no envuelto en JSON).
 
 ```
-GET /api/sprint/sample-preview?plantilla=resumen HTTP/1.1
+GET /api/sprint-fin/sample-preview?plantilla=resumen HTTP/1.1
 Host: localhost:3001
 ```
 
@@ -117,7 +120,7 @@ Content-Type: text/html; charset=utf-8
 | Código | `code` | Cuándo ocurre | Ejemplo de body |
 |---|---|---|---|
 | 404 | `NOT_FOUND` | `docType` no registrado | `{"success":false,"code":"NOT_FOUND","message":"Tipo de documento no registrado: contrato"}` |
-| 404 | `NOT_FOUND` | `docType` registrado pero sin datos de ejemplo en `documentSamples` (hoy no ocurre con `epica`/`sprint`, aplicaría a un `docType` nuevo agregado sin `sample-data.ts`) | `{"success":false,"code":"NOT_FOUND","message":"No hay datos de ejemplo para sprint."}` |
+| 404 | `NOT_FOUND` | `docType` registrado pero sin datos de ejemplo en `documentSamples` (hoy no ocurre con `epica`/`sprint-inicio`/`sprint-fin`, aplicaría a un `docType` nuevo agregado sin `sample-data.ts`) | `{"success":false,"code":"NOT_FOUND","message":"No hay datos de ejemplo para sprint-fin."}` |
 | 401 | `UNAUTHORIZED` | Falta o es inválido `X-API-Key`, solo si `API_KEY` está definida en el servidor | `{"success":false,"code":"UNAUTHORIZED","message":"API key invalida o faltante."}` |
 | 500 | `INTERNAL_ERROR` | Falla inesperada al renderizar (p. ej. plantilla Handlebars corrupta) | `{"success":false,"code":"INTERNAL_ERROR","message":"Error al generar preview de ejemplo."}` |
 
@@ -154,10 +157,12 @@ Content-Type: text/html; charset=utf-8
 Ejemplo de request (curl) con un Markdown real de sprint:
 
 ```bash
-curl -X POST http://localhost:3001/api/sprint/extraer \
+curl -X POST http://localhost:3001/api/sprint-fin/extraer \
   -H "X-API-Key: $API_KEY" \
   -F "archivo=@sprint-1-junio-julio-2026.md;type=text/markdown"
 ```
+
+(Mismo request contra `/api/sprint-inicio/extraer` para un documento de arranque — el `.md` de origen es el mismo tipo de contenido, pero `sprint-inicio` extrae un JSON con menos campos, ver tabla de schema más abajo.)
 
 Contenido de ejemplo de `sprint-1-junio-julio-2026.md` (fragmento real del dominio, no genérico):
 
@@ -253,13 +258,14 @@ Contenido de ejemplo de `sprint-1-junio-julio-2026.md` (fragmento real del domin
 | 400 | `UPLOAD_ERROR` | El archivo no es `.md`/`text/markdown`/`text/plain` (rechazado por el `fileFilter` de multer), o cualquier otro `MulterError` que no sea de tamaño | `{"success":false,"code":"UPLOAD_ERROR","message":"Error al procesar el archivo subido."}` |
 | 413 | `UPLOAD_ERROR` | El archivo supera los 2 MB (`MulterError` `LIMIT_FILE_SIZE`) | `{"success":false,"code":"UPLOAD_ERROR","message":"Error al procesar el archivo subido."}` |
 | 401 | `UNAUTHORIZED` | Falta o es inválido `X-API-Key`, solo si `API_KEY` está definida en el servidor | `{"success":false,"code":"UNAUTHORIZED","message":"API key invalida o faltante."}` |
-| 500 | `INTERNAL_ERROR` | OpenAI no devuelve datos parseables, o cualquier otra falla inesperada durante la extracción (incluye timeouts/errores transitorios de OpenAI ya reintentados por el SDK: 2 reintentos, 30s de timeout) | `{"success":false,"code":"INTERNAL_ERROR","message":"Error al extraer datos."}` |
+| 500 | `INTERNAL_ERROR` | OpenAI no devuelve datos parseables, la respuesta no pasa la validación del schema tras agotar los reintentos (ver más abajo), o cualquier otra falla inesperada (incluye timeouts/errores transitorios de OpenAI ya reintentados por el SDK: 2 reintentos, 30s de timeout) | `{"success":false,"code":"INTERNAL_ERROR","message":"Error al extraer datos."}` |
 
 **Límites**
 
 - Tamaño máximo de archivo: **2 MB** (`multer` `limits.fileSize`).
 - Solo se acepta extensión `.md` (o `mimetype` `text/markdown`/`text/plain`); cualquier otro tipo se rechaza con `UPLOAD_ERROR`.
-- Timeout hacia OpenAI: 30s, con 2 reintentos automáticos del SDK solo ante errores transitorios (408/409/429/5xx o de red) — 400/401/403/404/422 no se reintentan.
+- Timeout hacia OpenAI: 30s, con 2 reintentos automáticos del SDK solo ante errores transitorios (408/409/429/5xx o de red) — 400/401/403/404/422 no se reintentan. Distinto del punto siguiente.
+- **Reintento por validación de schema (hasta 3, 4 intentos en total)**: si la respuesta de OpenAI no cumple el schema Zod del `docType` (ej. un campo de texto fuera del rango `min()`/`max()`), `extractor.service.ts` reintenta reenviando el mismo markdown con el motivo exacto del fallo, antes de responder `500 INTERNAL_ERROR`. Ver ADR-0008. Cada intento adicional suma latencia y costo (tokens) — `uso.costoEstimadoUsd` en la respuesta refleja la suma de **todos** los intentos, no solo el que tuvo éxito.
 - No hay rate limiting propio en la API (no hay `express-rate-limit` ni similar instalado); el único costo por request es monetario (tokens de OpenAI, ver `uso.costoEstimadoUsd`).
 
 ---
@@ -413,7 +419,7 @@ Ejemplo real de `400 VALIDATION_ERROR` (se mandó `sprint` sin `members` y con u
 
 | Nombre | Tipo | Requerido | Descripción | Ejemplo |
 |---|---|---|---|---|
-| `docType` | string | Sí | Tipo de documento registrado | `sprint` |
+| `docType` | string | Sí | Tipo de documento registrado | `sprint-fin` |
 
 **Headers requeridos**
 
@@ -435,7 +441,7 @@ Cuerpo: binario del PDF (bytes crudos, no JSON). El nombre de archivo es `{docTy
 Ejemplo de request con `sprint` y `plantilla` explícita:
 
 ```http
-POST /api/sprint/pdf HTTP/1.1
+POST /api/sprint-fin/pdf HTTP/1.1
 Content-Type: application/json
 
 {
@@ -522,13 +528,13 @@ Content-Type: application/json
 
 ## 5. Histórico de sprint (endpoints específicos, no siguen el patrón `:docType`)
 
-**Descripción de negocio:** única excepción al patrón genérico de arriba — el generador es *stateless* salvo por esto. Vive en `backend/src/documents/sprint/historico.routes.ts` + `historico.ts`, exclusivo de `sprint` (no existe equivalente para `epica`). Persiste un registro resumido por sprint cerrado en un archivo JSON local no versionado (`backend/data/sprint-historico.json`) para que `template-resumen-v3.html` pueda mostrar tendencia/proyección contra sprints anteriores.
+**Descripción de negocio:** única excepción al patrón genérico de arriba — el generador es *stateless* salvo por esto. Vive en `backend/src/documents/sprint-fin/historico.routes.ts` + `historico.ts`, exclusivo de `sprint-fin` (no existe equivalente para `epica` ni para `sprint-inicio`, que no tiene tendencia). Persiste un registro resumido por sprint cerrado en un archivo JSON local no versionado (`backend/data/sprint-historico.json`) para que `template-resumen-v3.html` pueda mostrar tendencia/proyección contra sprints anteriores.
 
-### 5.1 `POST /api/sprint/historico`
+### 5.1 `POST /api/sprint-fin/historico`
 
 Registra (o actualiza) un sprint cerrado en el histórico. **No se dispara automáticamente al llamar `/pdf`** — es una llamada explícita aparte, para que probar/regenerar el PDF final no ensucie el histórico.
 
-- **Body:** idéntico en forma y validación a `/api/sprint/pdf` (`{ datos, plantilla? }` o el schema en la raíz; `plantilla` se ignora).
+- **Body:** idéntico en forma y validación a `/api/sprint-fin/pdf` (`{ datos, plantilla? }` o el schema en la raíz; `plantilla` se ignora).
 - **Comportamiento:** valida con `SprintSchema`, compone los datos (`componerDatosSprint`) para obtener los KPIs ya calculados, y hace **upsert** por `sprintName`+`weekNumber` — llamarlo de nuevo con el mismo sprint actualiza la entrada existente en vez de duplicarla.
 
 **Respuesta 200:**
@@ -554,7 +560,7 @@ Registra (o actualiza) un sprint cerrado en el histórico. **No se dispara autom
 
 **Respuestas de error:** mismo formato `ErrorResponseBody` que el resto de la API — `400 VALIDATION_ERROR` si el body no cumple `SprintSchema`, `500 INTERNAL_ERROR` si falla la escritura del archivo.
 
-### 5.2 `GET /api/sprint/historico`
+### 5.2 `GET /api/sprint-fin/historico`
 
 Devuelve la lista cruda de entradas registradas (sin filtrar ni paginar).
 
@@ -603,7 +609,38 @@ Nota sobre `cierre`: `epicas[].cumplimiento`, `epicas[].sprints` y `riesgoTransv
 
 El ejemplo completo de request/response para `epica` está en la sección 3 (`/preview`) arriba; es el mismo body válido para `/pdf`.
 
-### `sprint` — schema (`SprintSchema`, `backend/src/documents/sprint/config.ts`)
+### `sprint-inicio` — schema (`SprintInicioSchema`, `backend/src/documents/sprint-inicio/config.ts`)
+
+Schema deliberadamente mínimo — ver ADR-0008 y CLAUDE.md. Rangos de texto con margen de tolerancia sobre el rango exacto que pide el prompt de IA (los LLM no cuentan caracteres con precisión); si un intento cae fuera de rango, `extractor.service.ts` reintenta hasta 3 veces antes de fallar.
+
+| Campo | Tipo | Requerido | Restricciones |
+|---|---|---|---|
+| `sprintName` | string | Sí | se normaliza a mayúsculas en el servidor; debe terminar en un año de 4 dígitos (regex) |
+| `dateStart` | string | Sí | — |
+| `dateEnd` | string | Sí | — |
+| `weekNumber` | string | Sí | — |
+| `horas.segmentos` | array de objeto | Sí | mínimo 1 elemento |
+| `horas.segmentos[].nombre` | string | Sí | — |
+| `horas.segmentos[].horas` | number | Sí | ≥ 0 |
+| `members` | array de objeto | Sí | mínimo 1 elemento |
+| `members[].name` | string | Sí | — |
+| `members[].initials` | string | Sí | regex `^[A-Z]{2}$` — exactamente 2 letras mayúsculas |
+| `members[].objetivo` | string | Sí | 450–520 caracteres (el prompt de IA apunta a 480–500 exactos; el schema deja margen de tolerancia) |
+| `members[].projects` | array de objeto | Sí | mínimo 1 elemento |
+| `members[].projects[].name` | string | Sí | — |
+| `members[].projects[].issues` | array de objeto | Sí | mínimo 1 elemento |
+| `...issues[].title` | string | Sí | mínimo 1 carácter |
+| `...issues[].status` | enum | Sí | `"Todo"` \| `"In Progress"` \| `"In Review"` \| `"Done"` \| `"Cancelled"` |
+| `equipo.quien` | string | Sí | 30–110 caracteres (prompt apunta a 60–90) |
+| `equipo.cuando` | string | Sí | 10–70 caracteres (prompt apunta a 30–50) |
+| `equipo.donde` | string | Sí | 20–100 caracteres (prompt apunta a 50–80) |
+| `equipo.como` | string | Sí | 10–90 caracteres (prompt apunta a 40–70) |
+| `riesgoTransversal.texto` | string | Sí | 150–250 caracteres (prompt apunta a 180–230). Siempre el mismo tema: incidencias no planeadas que consuman las horas de "Incidencias" de `horas` |
+| `riesgoTransversal.mitigacion` | string | Sí | 70–160 caracteres (prompt apunta a 100–140) |
+
+Sin `estadoSprint`, `porcentajeCompletado`, `agregado` por issue, `desviaciones`, `riesgoTransversalResultado`, `horasPlaneadas` ni horas por miembro — ninguno aplica a un sprint que todavía no arrancó (ver `sprint-fin` más abajo para esos campos).
+
+### `sprint-fin` — schema (`SprintSchema`, `backend/src/documents/sprint-fin/config.ts`)
 
 | Campo | Tipo | Requerido | Restricciones |
 |---|---|---|---|
@@ -620,7 +657,7 @@ El ejemplo completo de request/response para `epica` está en la sección 3 (`/p
 | `members` | array de objeto | Sí | mínimo 1 elemento |
 | `members[].name` | string | Sí | — |
 | `members[].initials` | string | Sí | — |
-| `members[].objetivo` | string | Sí | máx. 600 caracteres (el prompt de IA apunta a 480–500 exactos, pero el schema solo exige el máximo) |
+| `members[].objetivo` | string | Sí | máx. 600 caracteres (el prompt de IA apunta a 480–500 exactos, pero el schema solo exige el máximo — a diferencia de `sprint-inicio`, este `docType` todavía no tiene `.min()`, ver Caso borde A de `docs/BUSINESS_FLOWS.md`) |
 | `members[].desviaciones.logrado` | string | Sí | máx. 320 caracteres. Desviación de alcance de ESA persona (issues planeados vs. completados) |
 | `members[].desviaciones.motivo` | string | Sí | máx. 200 caracteres. Justifica el desfase de horas planeadas vs. reales en relación con los issues logrados |
 | `members[].horas` | objeto | No | opcional; mismo shape que `horas` del documento (segmentos con `nombre`/`horas`/`horasPlaneadas`). Si viene, la suma de las `horas` de sus segmentos debe dar exactamente 40 (semana normal) u 32 (semana con festivo), y **todos** los members deben coincidir en ese total (validado en `superRefine`) |
@@ -633,13 +670,13 @@ El ejemplo completo de request/response para `epica` está en la sección 3 (`/p
 | `...issues[].status` | enum | Sí | `"Todo"` \| `"In Progress"` \| `"In Review"` \| `"Done"` \| `"Cancelled"` |
 | `...issues[].agregado` | boolean | Sí | `true` si el issue se sumó durante el sprint (no estaba planeado) |
 | `equipo.quien` / `.cuando` / `.donde` / `.como` | string | Sí | máx. 150 caracteres cada uno |
-| `riesgoTransversal.texto` | string | Sí | máx. 320 caracteres. El riesgo transversal de `sprint` es siempre el mismo tema: que aparezcan incidencias no planeadas que consuman las horas reservadas para el segmento "Incidencias" de `horas` |
+| `riesgoTransversal.texto` | string | Sí | máx. 320 caracteres. El riesgo transversal de `sprint-fin` es siempre el mismo tema: que aparezcan incidencias no planeadas que consuman las horas reservadas para el segmento "Incidencias" de `horas` |
 | `riesgoTransversal.mitigacion` | string | Sí | máx. 200 caracteres |
-| `riesgoTransversalResultado` | string | No | máx. 260 caracteres. Solo aplica al flujo de **cierre**: si el riesgo de incidencias se materializó o no, cuántos de los issues planeados se completaron y, si hubo issues agregados, cuántos de esos se completaron — con cifras concretas derivadas de los issues del documento, no una descripción vaga. A diferencia del campo homónimo de `epica` (puramente cualitativo, sin cifras — ver `EPICA_SYSTEM_PROMPT`), en `sprint` sí debe incluir números reales |
+| `riesgoTransversalResultado` | string | No | máx. 260 caracteres. Si el riesgo de incidencias se materializó o no, cuántos de los issues planeados se completaron y, si hubo issues agregados, cuántos de esos se completaron — con cifras concretas derivadas de los issues del documento, no una descripción vaga. A diferencia del campo homónimo de `epica` (puramente cualitativo, sin cifras — ver `EPICA_SYSTEM_PROMPT`), en `sprint-fin` sí debe incluir números reales |
 
 Nota sobre `resumen-v2`: es una versión simplificada de `resumen` pensada para el cierre — su header solo muestra 2 KPIs (`planPorcentajeCompletado`/`agregadoPorcentajeCompletado`, ya calculados por `componerDatosSprint()`), sin el box de horas por miembro ni las desviaciones de alcance que sí tiene `resumen-v3`. En el footer, en vez de mostrar solo el riesgo prospectivo, agrega (si viene informado) `riesgoTransversalResultado` bajo un divisor con label "RESULTADO". `SPRINT_SYSTEM_PROMPT` solo completa `riesgoTransversalResultado` cuando el documento describe resultados reales (no un plan) — igual criterio que `members[].desviaciones`.
 
-El ejemplo completo de request/response para `sprint` está en las secciones 2 (`/extraer`) y 4 (`/pdf`) arriba.
+El ejemplo completo de request/response para `sprint-fin` está en las secciones 2 (`/extraer`) y 4 (`/pdf`) arriba (los ejemplos de esas secciones usan `sprint-fin`; para `sprint-inicio` el mismo flujo aplica con el schema reducido de arriba).
 
 ---
 
@@ -650,7 +687,8 @@ El ejemplo completo de request/response para `sprint` está en las secciones 2 (
 | Tamaño máximo de archivo `.md` | 2 MB | `POST /:docType/extraer` |
 | Extensión/mimetype de archivo aceptado | `.md`, `text/markdown`, `text/plain` | `POST /:docType/extraer` |
 | Tamaño máximo de body JSON | 2 MB | `POST /:docType/preview`, `POST /:docType/pdf` |
-| Timeout hacia OpenAI | 30s, 2 reintentos en errores transitorios | `POST /:docType/extraer` |
+| Timeout hacia OpenAI | 30s, 2 reintentos en errores transitorios (transporte/HTTP) | `POST /:docType/extraer` |
+| Reintento por validación de schema | hasta 3 (4 intentos en total), solo si la respuesta no cumple el schema Zod del `docType` | `POST /:docType/extraer` |
 | Timeout de render (Chromium) | 15s por paso (`setContent` y `page.pdf()` por separado) | `POST /:docType/pdf` |
 | Renders simultáneos | 4 (extra se encola, no se rechaza) | `POST /:docType/pdf` |
 | Rate limiting | No implementado | Todos los endpoints |

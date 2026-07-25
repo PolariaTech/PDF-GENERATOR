@@ -21,7 +21,7 @@ Ver `docs/BUSINESS_FLOWS.md` (Flujo 3 y Flujo 5, ahora recortados a un puntero a
 
 ## Referencias compartidas por los 4 workflows
 
-- Contrato de datos: `backend/src/documents/sprint/config.ts` (`SprintSchema`), `backend/src/documents/epica/config.ts` (`EpicaSchema`) — ningún workflow tiene un schema paralelo, todos validan contra el mismo que usa el flujo manual (Flujo 1 de `BUSINESS_FLOWS.md`).
+- Contrato de datos: `backend/src/documents/sprint-inicio/config.ts` (`SprintInicioSchema`), `backend/src/documents/sprint-fin/config.ts` (`SprintSchema`), `backend/src/documents/epica/config.ts` (`EpicaSchema`) — ningún workflow tiene un schema paralelo, todos validan contra el mismo que usa el flujo manual (Flujo 1 de `BUSINESS_FLOWS.md`).
 - Rutas y forma de los errores de la API: `backend/src/api/document.routes.ts`.
 - Motor de render y sus límites (timeout 15s, cola de 4 renders, alto auto-ajustable): `backend/src/core/generators/pdf.generator.ts`.
 - Casos borde compartidos entre el flujo manual y cualquier automatización (rangos de caracteres sin mínimo, timeout de render, LLM no confiable contando): `docs/BUSINESS_FLOWS.md`, Flujo 4.

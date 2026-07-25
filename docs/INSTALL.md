@@ -119,7 +119,7 @@ Si en cambio el proceso termina inmediatamente con `Falta la variable de entorno
 ## 7. Verificar que funciona
 
 1. Abrí **http://localhost:3001** en el navegador. Deberías ver la UI de una sola pantalla con tabs para elegir el tipo de documento (**Épica** / **Sprint**).
-2. Elegí un tipo de documento (por ejemplo, **Sprint**). La vista previa de ejemplo debería cargarse sola en el panel, sin subir ningún archivo — esto confirma que `GET /api/sprint/sample-preview` funciona (Express, Handlebars y Playwright están todos operativos).
+2. Elegí un tipo de documento (por ejemplo, **Sprint**). La vista previa de ejemplo debería cargarse sola en el panel, sin subir ningún archivo — esto confirma que `GET /api/sprint-fin/sample-preview` funciona (Express, Handlebars y Playwright están todos operativos).
 3. Como verificación directa por línea de comandos, con el servidor corriendo, en otra terminal:
 
    ```bash

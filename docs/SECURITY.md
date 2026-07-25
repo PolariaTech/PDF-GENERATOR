@@ -70,7 +70,7 @@ Puntos clave, tal como está implementado hoy:
 
 Pensado específicamente para el escenario descrito en `docs/planning/PLAN-N8N-SPRINT-WORKFLOW.md`: el backend
 se expone con una URL pública (deploy real o túnel tipo Cloudflare Tunnel/ngrok) para que un
-workflow de n8n en la nube pueda llamar a `POST /api/sprint/pdf`. En ese escenario, definir
+workflow de n8n en la nube pueda llamar a `POST /api/sprint-inicio/pdf` o `/api/sprint-fin/pdf`. En ese escenario, definir
 `API_KEY` en el `.env` de esa instancia es el control mínimo para que la URL pública no quede
 abierta a cualquiera que la descubra.
 
@@ -109,7 +109,7 @@ sin diferenciación entre, por ejemplo, "puede generar PDFs de épica" vs "puede
 sprint", ni entre lectura (`sample-preview`) y escritura/generación (`pdf`).
 
 Si en el futuro se necesita distinguir consumidores (p. ej. n8n solo puede llamar a
-`/api/sprint/pdf`, pero no a otros `docType`), eso requiere diseño nuevo — no está ni parcialmente
+`/api/sprint-inicio/pdf`/`/api/sprint-fin/pdf`, pero no a otros `docType`), eso requiere diseño nuevo — no está ni parcialmente
 implementado hoy.
 
 ---
