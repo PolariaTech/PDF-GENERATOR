@@ -1,6 +1,6 @@
 import { SprintData } from "./config";
 
-export const sprintSampleData: SprintData = {
+export const sprintFinSampleData: SprintData = {
   sprintName: "1 JUNIO-JULIO 2026",
   dateStart: "Jun 22",
   dateEnd: "Jun29",

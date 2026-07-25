@@ -4,7 +4,7 @@ import cors from "cors";
 import multer from "multer";
 import path from "path";
 import { documentRouter, sendError, apiKeyAuth } from "./api/document.routes";
-import { sprintHistoricoRouter } from "./documents/sprint/historico.routes";
+import { sprintHistoricoRouter } from "./documents/sprint-fin/historico.routes";
 import { closeBrowser } from "./core/generators/pdf.generator";
 
 if (!process.env.OPENAI_API_KEY) {

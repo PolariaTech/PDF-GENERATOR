@@ -374,7 +374,7 @@ Reglas:
 - priority solo puede ser Urgent, High, Medium o Low.
 - status solo puede ser Todo, In Progress, In Review, Done o Cancelled.
 - agregado es un booleano: true si el issue se agrego durante el sprint (no estaba planeado al inicio), false si estaba planeado desde el inicio. Si el documento no lo indica explicitamente, usa false.
-- Usa initials de 2 a 3 letras en mayusculas.
+- Usa initials de 2 letras en mayusculas (primer nombre, primer apellido).
 - Ademas, devuelve un bloque "equipo" con: quien (quien ejecuta el sprint, menciona solo a los miembros con trabajo asignado, 60-90 caracteres), cuando (ventana de tiempo del sprint, 30-50 caracteres), donde (entornos y canales donde corre el trabajo, 50-80 caracteres) y como (stack tecnico usado, 40-70 caracteres).
 - Y un bloque "riesgoTransversal" con: texto (el riesgo transversal de un sprint es siempre el mismo tipo: que aparezcan incidencias no planeadas durante el sprint que consuman las horas reservadas para el segmento "Incidencias" del bloque horas, afectando el avance de los issues planeados de Proyectos. Redactalo en lenguaje simple, sin jerga tecnica y sin citar cifras exactas, 180-230 caracteres) y mitigacion (explica que esas horas de Incidencias ya estan reservadas de antemano como colchon, precisamente para poder absorber ese riesgo sin afectar lo planeado, 100-140 caracteres).
 - "riesgoTransversalResultado" (opcional, string en lenguaje simple, sin jerga tecnica): inclúyelo SIEMPRE que "tiempoVerbal" sea "Pasado" -- no lo omitas en ese caso. Solo omite este campo por completo si "tiempoVerbal" es "Futuro" (un plan sin resultados reales todavia). Cuando "tiempoVerbal" sea "Pasado", escribe UNA sola frase que diga si entraron incidencias no planeadas que consumieran el colchon de horas reservado para el segmento "Incidencias", o si no entro ninguna -- basate en las horas reales de Incidencias vs. lo reservado si el documento lo menciona, o en el criterio general si no lo menciona. NO incluyas cifras de issues planeados/agregados/completados en este campo: esos numeros se calculan aparte en codigo a partir de los issues que ya extrajiste, y se agregan automaticamente despues de tu frase -- si intentas contarlos tu mismo es facil que te equivoques. Ejemplos: "No entraron incidencias que consumieran el colchon reservado." o "Entraron incidencias que consumieron parte del colchon reservado, aunque no afectaron el avance de los issues planeados." Entre 40 y 120 caracteres, contando espacios.
@@ -639,8 +639,8 @@ export function componerDatosSprint(datosExtraidos: SprintData) {
   };
 }
 
-export const sprintConfig: DocumentConfig<SprintData> = {
-  id: "sprint",
+export const sprintFinConfig: DocumentConfig<SprintData> = {
+  id: "sprint-fin",
   schema: SprintSchema,
   systemPrompt: SPRINT_SYSTEM_PROMPT,
   componerDatos: componerDatosSprint,
@@ -648,10 +648,6 @@ export const sprintConfig: DocumentConfig<SprintData> = {
     detail: {
       path: path.join(__dirname, "template-detail.html"),
       pdf: { width: "900px", height: "1188px" },
-    },
-    "resumen-inicio": {
-      path: path.join(__dirname, "template-resumen-inicio.html"),
-      pdf: { width: "1240px", height: "1050px" },
     },
     resumen: {
       path: path.join(__dirname, "template-resumen.html"),

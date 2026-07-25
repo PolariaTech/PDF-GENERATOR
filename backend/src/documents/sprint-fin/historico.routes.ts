@@ -1,23 +1,25 @@
 import { Router } from "express";
 import { sendError } from "../../api/document.routes";
-import { sprintConfig } from "./config";
+import { sprintFinConfig } from "./config";
 import { leerHistorico, registrarSprintCerrado, SprintHistoricoEntry } from "./historico";
 
-// Ruta especifica de sprint, fuera del patron generico de document.routes.ts
+// Ruta especifica de sprint-fin, fuera del patron generico de document.routes.ts
 // (ese patron es el mismo para cualquier docType y no debe llevar logica de
 // negocio de un tipo en particular). Se llama de forma explicita cuando un
 // sprint realmente cierra -- NO se dispara automaticamente al generar un PDF,
 // para que probar/regenerar el PDF final no ensucie el historico por
 // accidente. Ver docs/planning/ANALISIS_INFORME_EJECUTIVO_SPRINT_RESUMEN_V2.md, Fase 3.
+// El historico solo aplica a sprint-fin (template-resumen-v3): sprint-inicio no
+// tiene tendencia/proyeccion, no existe esta ruta para ese document type.
 export const sprintHistoricoRouter = Router();
 
 function getPayload(body: any) {
   return body?.datos ?? body;
 }
 
-sprintHistoricoRouter.post("/sprint/historico", (req, res) => {
+sprintHistoricoRouter.post("/sprint-fin/historico", (req, res) => {
   try {
-    const parsed = sprintConfig.schema.safeParse(getPayload(req.body));
+    const parsed = sprintFinConfig.schema.safeParse(getPayload(req.body));
     if (!parsed.success) {
       sendError(
         res,
@@ -29,7 +31,7 @@ sprintHistoricoRouter.post("/sprint/historico", (req, res) => {
       return;
     }
 
-    const datos = sprintConfig.componerDatos(parsed.data);
+    const datos = sprintFinConfig.componerDatos(parsed.data);
     const entry: SprintHistoricoEntry = {
       sprintName: datos.sprintName,
       weekNumber: datos.weekNumber,
@@ -45,16 +47,16 @@ sprintHistoricoRouter.post("/sprint/historico", (req, res) => {
     const historico = registrarSprintCerrado(entry);
     res.json({ success: true, entry, total: historico.length });
   } catch (err: any) {
-    console.error("Error en POST /api/sprint/historico:", err);
+    console.error("Error en POST /api/sprint-fin/historico:", err);
     sendError(res, 500, "INTERNAL_ERROR", "Error al registrar el sprint en el historico.");
   }
 });
 
-sprintHistoricoRouter.get("/sprint/historico", (_req, res) => {
+sprintHistoricoRouter.get("/sprint-fin/historico", (_req, res) => {
   try {
     res.json({ success: true, historico: leerHistorico() });
   } catch (err: any) {
-    console.error("Error en GET /api/sprint/historico:", err);
+    console.error("Error en GET /api/sprint-fin/historico:", err);
     sendError(res, 500, "INTERNAL_ERROR", "Error al leer el historico.");
   }
 });

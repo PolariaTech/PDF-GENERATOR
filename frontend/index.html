@@ -56,9 +56,16 @@
             <button
               type="button"
               class="doc-tab rounded-lg px-4 py-2 text-sm font-semibold transition"
-              data-doc-type="sprint"
+              data-doc-type="sprint-inicio"
             >
-              Sprint
+              Sprint Inicio
+            </button>
+            <button
+              type="button"
+              class="doc-tab rounded-lg px-4 py-2 text-sm font-semibold transition"
+              data-doc-type="sprint-fin"
+            >
+              Sprint Fin
             </button>
           </div>
         </div>
@@ -199,20 +206,32 @@
             { key: "cierre", label: "Cierre" },
           ],
         },
-        sprint: {
-          label: "Sprint",
-          title: "Generador de Resumen de Sprint",
+        "sprint-inicio": {
+          label: "Sprint Inicio",
+          title: "Generador de Resumen de Inicio de Sprint",
           description:
-            "Sube el Markdown del sprint, revisa miembros, proyectos e issues, y descarga el PDF con el diseno v2.",
-          help: "Usa el esquema Sprint agrupado por miembros, proyectos e issues.",
-          uploadTitle: "Subir documento del sprint",
-          filePrefix: "Resumen_Sprint",
+            "Sube el Markdown de arranque del sprint, revisa miembros, proyectos e issues, y descarga el PDF de planning.",
+          help: "Usa el esquema minimo de inicio de sprint: sin agregado, desviaciones ni resultado de riesgo (eso es de sprint-fin).",
+          uploadTitle: "Subir documento de inicio del sprint",
+          filePrefix: "Resumen_Inicio_Sprint",
+          nameFromData(data) {
+            return data.sprintName || data.weekNumber || "sprint";
+          },
+          templates: [{ key: "resumen-inicio", label: "Resumen inicio" }],
+        },
+        "sprint-fin": {
+          label: "Sprint Fin",
+          title: "Generador de Resumen de Cierre de Sprint",
+          description:
+            "Sube el Markdown del sprint cerrado, revisa miembros, proyectos e issues, y descarga el PDF con el diseno v2.",
+          help: "Usa el esquema Sprint agrupado por miembros, proyectos e issues, con agregado/desviaciones/resultado de riesgo.",
+          uploadTitle: "Subir documento de cierre del sprint",
+          filePrefix: "Resumen_Fin_Sprint",
           nameFromData(data) {
             return data.sprintName || data.weekNumber || "sprint";
           },
           templates: [
             { key: "detail", label: "Detalle" },
-            { key: "resumen-inicio", label: "Resumen inicio" },
             { key: "resumen", label: "Resumen fin" },
             { key: "resumen-v2", label: "Resumen fin v2" },
             { key: "resumen-v3", label: "Resumen fin v3" },
@@ -314,8 +333,8 @@
 
       function resetOutput() {
         editor.value = "";
-        // Sprint always shows the edit panel (no AI extraction step needed)
-        if (selectedDocType === "sprint") {
+        // Sprint (inicio o fin) always shows the edit panel (no AI extraction step needed)
+        if (selectedDocType === "sprint-inicio" || selectedDocType === "sprint-fin") {
           stepEdit.classList.remove("hidden");
         } else {
           stepEdit.classList.add("hidden");
