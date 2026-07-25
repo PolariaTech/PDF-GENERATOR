@@ -11,7 +11,7 @@ Estado real de los 20 puntos de `GUIA_DOCUMENTACION_EXTENDIDA.md` aplicados al p
 | 5 | Guía de instalación y ejecución local | Alta | ✅ Hecho | `docs/INSTALL.md` |
 | 6 | CONTRIBUTING.md | Alta | ✅ Hecho | `CONTRIBUTING.md` |
 | 7 | Glosario de términos del negocio | Alta | ✅ Hecho | `docs/GLOSSARY.md` |
-| 8 | Flujos de negocio end-to-end | Alta | ✅ Hecho | `docs/BUSINESS_FLOWS.md` |
+| 8 | Flujos de negocio end-to-end | Alta | ✅ Hecho | `docs/BUSINESS_FLOWS.md` (flujo de negocio) + `docs/WORKFLOWS/` (documentación operativa de los 4 workflows de n8n, separada porque asume que quien la lee va a operar n8n directamente) |
 | 9 | Architecture Decision Records (ADRs) | Media | ✅ Hecho (7 ADRs) | `docs/adr/0001` a `0007` |
 | 10 | Documentación de testing | Media | ⚠️ Hecho como honestidad, no como suite | `docs/TESTING.md` — no hay framework automatizado; documenta el protocolo de verificación manual vigente |
 | 11 | Runbooks de operación y deployment | Media | ✅ Hecho | `docs/RUNBOOKS.md` |
