@@ -1,6 +1,6 @@
 import path from "path";
 import { z } from "zod";
-import { asignarPaleta, construirGradiente, formatearHoras } from "../../constants";
+import { asignarPaleta, construirGradiente, formatearHoras, resolverGridCards } from "../../constants";
 import { DocumentConfig } from "../types";
 import { leerHistorico } from "./historico";
 
@@ -101,6 +101,16 @@ export const SprintSchema = z.object({
           ).min(1),
         }),
       ).min(1),
+      // Trabajo con la label "personalization" de Linear: sin proyecto, asignado
+      // a esta persona. Se arma deterministicamente en n8n (igual que "horas"),
+      // nunca via la IA -- mismo patron que sprint-inicio (ver ADR de esa partición).
+      personalizacion: z.array(
+        z.object({
+          title: z.string().min(1),
+          status: IssueStatusSchema,
+          agregado: z.boolean(),
+        }),
+      ).optional(),
     }),
   ).min(1),
   equipo: z.object({
@@ -189,6 +199,27 @@ const PLAN_AGREGADO_CFG = {
   planeados: "#0b1430",
   agregados: "#2dd4bf",
 };
+
+// Mismo cálculo de "Planeados vs Agregados" que ya existe para issues de
+// proyecto, reusado para personalización (misma caja visual, ver
+// template-resumen-v2.html: sección propia, separada de la de proyecto, pero
+// con la misma estructura interna Planeados/Agregados + Resultado).
+function construirDonutPlaneadosAgregados(issues: { agregado: boolean }[]) {
+  const total = issues.length;
+  const planeados = issues.filter((issue) => !issue.agregado).length;
+  const agregados = total - planeados;
+  return {
+    planeados,
+    agregados,
+    planGradient: construirGradiente(
+      [
+        { color: PLAN_AGREGADO_CFG.planeados, valor: planeados },
+        { color: PLAN_AGREGADO_CFG.agregados, valor: agregados },
+      ],
+      total,
+    ),
+  };
+}
 
 // Estado del sprint segun % de issues Done, con su badge de color. Se usa en
 // template-resumen-v2.html para los dos KPIs (Planeados / Agregados). Solo hay
@@ -298,6 +329,29 @@ const STATUS_TO_BUCKET: Record<string, string> = {
   Done: "Completado",
   Cancelled: "Cancelado",
 };
+
+// Donut "Total + conteo por estado" (mismo diseño que "Resultado" en la
+// plantilla): usado por la sección "Personalización" de cada miembro en
+// template-resumen-v2.html. Usa las mismas 5 categorías reales que "Resultado"
+// en ESTE template (ver ESTADO_DONUT_KEYS_V3 arriba) -- no las 9 de ESTADO_DONUT_CFG,
+// para que las dos secciones de la tarjeta se vean consistentes.
+function construirDonutEstado(issues: { status: string }[]) {
+  const total = issues.length;
+  const estadoConteos = ESTADO_DONUT_CFG.filter((cfg) =>
+    ESTADO_DONUT_KEYS_V3.includes(cfg.key),
+  ).map((cfg) => ({
+    ...cfg,
+    valor: issues.filter((issue) => STATUS_TO_BUCKET[issue.status] === cfg.key).length,
+  }));
+  return {
+    total,
+    estadoConteos,
+    estadoGradient: construirGradiente(
+      estadoConteos.map((cfg) => ({ color: cfg.color, valor: cfg.valor })),
+      total,
+    ),
+  };
+}
 
 // Normaliza un nombre a Title Case: "LUIS DANIEL CANTILLO OSPINO" ->
 // "Luis Daniel Cantillo Ospino". Cada palabra con la primera en mayuscula y el
@@ -448,6 +502,13 @@ export function componerDatosSprint(datosExtraidos: SprintData) {
       projects,
       vencidos,
       horas: horasMiembro,
+      // Mismo diseño que la caja de proyecto (Planeados/Agregados + Resultado),
+      // pero solo sobre los issues sin proyecto con label "personalization" de
+      // este member -- sección propia, separada de la de proyecto.
+      personalizacion: {
+        ...construirDonutEstado(member.personalizacion ?? []),
+        ...construirDonutPlaneadosAgregados(member.personalizacion ?? []),
+      },
       icono: paleta.icono,
       colorAccent: paleta.colorAccent,
       colorBgIcon: paleta.colorBgIcon,
@@ -601,12 +662,16 @@ export function componerDatosSprint(datosExtraidos: SprintData) {
     proyeccion = { promedioGlobal, direccion, color: colorDireccion, bg: bgDireccion };
   }
 
+  const grid = resolverGridCards(members.length);
+
   return {
     ...datosExtraidos,
     riesgoTransversalResultado,
     horas,
     teamSize: String(members.length),
     members,
+    cardColumns: grid.columns,
+    pdfWidth: grid.pdfWidth,
     planPorcentajeCompletado: planKpi.porcentaje,
     planEstadoSprint: planKpi.estado,
     planEstadoColor: planKpi.color,

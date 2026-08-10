@@ -127,7 +127,7 @@
 
       .cards-grid {
         display: grid;
-        grid-template-columns: repeat(var(--card-count), minmax(0, 1fr));
+        grid-template-columns: repeat(var(--card-columns), minmax(0, 1fr));
         gap: 16px;
       }
       .epic-card {
@@ -416,7 +416,7 @@
       }
     </style>
   </head>
-  <body>
+  <body style="width: {{pdfWidth}}px">
     <div class="page">
       <div class="header">
         <div class="header-left">
@@ -443,7 +443,7 @@
         </div>
       </div>
 
-      <div class="cards-grid" style="--card-count: {{epicas.length}}">
+      <div class="cards-grid" style="--card-columns: {{cardColumns}}">
         {{#each epicas}}
         <div class="epic-card">
           <div class="epic-card-head">

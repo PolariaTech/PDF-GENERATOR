@@ -1,6 +1,6 @@
 import path from "path";
 import { z } from "zod";
-import { HORAS_FIJAS, asignarPaleta, construirGradiente } from "../../constants";
+import { HORAS_FIJAS, asignarPaleta, construirGradiente, resolverGridCards } from "../../constants";
 import { DocumentConfig } from "../types";
 
 // Un sprint dentro del ciclo de esta epica (normalmente 4 sprints semanales
@@ -164,11 +164,14 @@ function corregirFechaFin(fechaInicio: string, fechaFin: string, duracion: strin
 export function componerDatosEpica(datosExtraidos: EpicaData) {
   const periodo = asegurarAnioEnPeriodo(datosExtraidos.periodo, datosExtraidos.fechaInicio, datosExtraidos.fechaFin);
   const anio = parseInt(periodo.match(/\d{4}/)![0], 10);
+  const grid = resolverGridCards(datosExtraidos.epicas.length);
 
   return {
     ...datosExtraidos,
     periodo,
     fechaFin: corregirFechaFin(datosExtraidos.fechaInicio, datosExtraidos.fechaFin, datosExtraidos.duracion, anio),
+    cardColumns: grid.columns,
+    pdfWidth: grid.pdfWidth,
     epicas: datosExtraidos.epicas.map((epica, indice) => {
       const sprintsTotal = epica.sprints?.length ?? 0;
       const sprintsCumplidos =

@@ -161,7 +161,7 @@
 
       .cards-grid {
         display: grid;
-        grid-template-columns: repeat(var(--card-count), minmax(0, 1fr));
+        grid-template-columns: repeat(var(--card-columns), minmax(0, 1fr));
         gap: 16px;
       }
       .epic-card {
@@ -526,7 +526,7 @@
       }
     </style>
   </head>
-  <body>
+  <body style="width: {{pdfWidth}}px">
     <div class="page">
       <div class="header">
         <div class="header-top">
@@ -573,7 +573,7 @@
         </div>
       </div>
 
-      <div class="cards-grid" style="--card-count: {{members.length}}">
+      <div class="cards-grid" style="--card-columns: {{cardColumns}}">
         {{#each members}}
         <div class="epic-card">
           <div class="epic-card-head">
@@ -651,6 +651,94 @@
               </div>
             </div>
           </div>
+
+          <div class="stats-box">
+            <div class="stats-row-head">
+              <div>
+                <div class="stats-title">Personalización</div>
+                <div class="stats-subtitle">Planeados vs agregados</div>
+                <div class="stats-legend">
+                  <div class="stats-legend-row">
+                    <span class="stats-dot" style="background:{{this.planColor}}"></span>
+                    Planeados<span class="stats-legend-val">{{this.personalizacion.planeados}}</span>
+                  </div>
+                  <div class="stats-legend-row">
+                    <span class="stats-dot" style="background:{{this.agregadoColor}}"></span>
+                    Agregados<span class="stats-legend-val">{{this.personalizacion.agregados}}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="donut" style="background:{{this.personalizacion.planGradient}}">
+                <div class="donut-hole">
+                  <span class="donut-num">{{this.personalizacion.total}}</span>
+                  <span class="donut-lbl">Total</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="stats-divider"></div>
+
+            <div class="stats-title">Resultado</div>
+            <div class="stats-subtitle">Distribución por estado</div>
+            <div class="estado-row">
+              <div
+                class="donut donut-sm"
+                style="background:{{this.personalizacion.estadoGradient}}"
+              >
+                <div class="donut-hole donut-hole-sm">
+                  <span class="donut-num">{{this.personalizacion.total}}</span>
+                  <span class="donut-lbl">Total</span>
+                </div>
+              </div>
+              <div class="estado-legend">
+                {{#each this.personalizacion.estadoConteos}}
+                <div class="estado-legend-row">
+                  <span
+                    class="stats-dot"
+                    style="background:{{this.color}}"
+                  ></span>
+                  {{this.label}}<span class="stats-legend-val"
+                    >{{this.valor}}</span
+                  >
+                </div>
+                {{/each}}
+              </div>
+            </div>
+          </div>
+
+          {{#if this.horas}}
+          <div class="stats-box">
+            <div class="stats-row-head">
+              <div class="stats-title">Horas</div>
+              <span class="hours-badge">REAL</span>
+            </div>
+            <div class="hours-sub">Esta semana · de {{this.horas.total}}h totales</div>
+            <div class="bar-track">
+              {{#each this.horas.segmentos}}
+              <div
+                class="bar-seg"
+                style="width:{{this.pct}}%; background:{{this.color}}"
+              >
+                {{#if this.mostrarPct}}{{this.pct}}%{{/if}}
+              </div>
+              {{/each}}
+            </div>
+            <div class="hours-legend">
+              {{#each this.horas.segmentos}}
+              <div class="hours-legend-row">
+                <span class="name">
+                  <span
+                    class="hours-legend-dot"
+                    style="background:{{this.color}}"
+                  ></span
+                  >{{this.nombre}}
+                </span>
+                <span class="val">{{this.pct}}% · {{this.horas}}h</span>
+              </div>
+              {{/each}}
+            </div>
+          </div>
+          {{/if}}
         </div>
         {{/each}}
       </div>

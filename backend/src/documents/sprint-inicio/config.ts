@@ -1,6 +1,6 @@
 import path from "path";
 import { z } from "zod";
-import { asignarPaleta, construirGradiente, formatearHoras } from "../../constants";
+import { asignarPaleta, construirGradiente, formatearHoras, resolverGridCards } from "../../constants";
 import { DocumentConfig } from "../types";
 
 // Schema deliberadamente minimo: solo los campos que template-resumen-inicio.html
@@ -219,11 +219,15 @@ export function componerDatosInicio(datosExtraidos: SprintInicioData) {
     };
   });
 
+  const grid = resolverGridCards(members.length);
+
   return {
     ...datosExtraidos,
     teamSize: String(members.length),
     members,
     horas: construirBloqueHoras(datosExtraidos.horas.segmentos),
+    cardColumns: grid.columns,
+    pdfWidth: grid.pdfWidth,
   };
 }
 

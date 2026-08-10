@@ -150,6 +150,45 @@ export function asignarPaleta(indice: number): Paleta {
   return PALETAS[indice % PALETAS.length];
 }
 
+// Layout de tarjetas (cards-grid) compartido por epica/sprint-inicio/sprint-fin:
+// 1-4 tarjetas -> 1 fila con esa cantidad de columnas (igual que hoy); 5-6 ->
+// 2 filas x 3 columnas; 7-8 -> 2 filas x 4 columnas, ensanchando la pagina para
+// que la tarjeta no vuelva a angostarse solo por estar de nuevo en 4 columnas
+// (se mantiene el mismo ancho de tarjeta que en el caso de 3 columnas). El
+// ancho se resuelve aca, ANTES de renderizar (a diferencia del alto, que se mide
+// despues porque depende de texto que envuelve de forma impredecible) --
+// determinista porque solo depende de la cantidad de tarjetas, ya conocida.
+const CARD_GAP_PX = 16;
+const BODY_PADDING_PX = 24; // a cada lado
+const PAGINA_ANCHO_BASE_PX = 1240;
+
+function anchoTarjeta(columnas: number, anchoPagina: number): number {
+  return (anchoPagina - BODY_PADDING_PX * 2 - CARD_GAP_PX * (columnas - 1)) / columnas;
+}
+
+export interface GridCards {
+  columns: number;
+  rows: number;
+  pdfWidth: number;
+}
+
+export function resolverGridCards(count: number): GridCards {
+  if (count <= 4) {
+    return { columns: Math.max(count, 1), rows: 1, pdfWidth: PAGINA_ANCHO_BASE_PX };
+  }
+  if (count <= 6) {
+    return { columns: 3, rows: 2, pdfWidth: PAGINA_ANCHO_BASE_PX };
+  }
+  // 7-8: mismo ancho de tarjeta que el caso de 3 columnas, pero con 4
+  // columnas -- se despeja el ancho de pagina necesario para lograrlo.
+  const columns = 4;
+  const anchoObjetivo = anchoTarjeta(3, PAGINA_ANCHO_BASE_PX);
+  const pdfWidth = Math.round(
+    anchoObjetivo * columns + CARD_GAP_PX * (columns - 1) + BODY_PADDING_PX * 2,
+  );
+  return { columns, rows: 2, pdfWidth };
+}
+
 // Arma el string conic-gradient para un donut a partir de segmentos
 // {color, valor}. Compartido entre sprint (planeados/agregados, por estado) y
 // epica (sprints cumplidos/no cumplidos del ciclo) para no duplicar la logica.

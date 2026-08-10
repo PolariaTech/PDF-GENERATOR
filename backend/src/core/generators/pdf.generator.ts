@@ -168,7 +168,12 @@ export async function generarPdf<T>(
 ): Promise<Buffer> {
   const template = resolveTemplate(config, templateKey);
   const html = generarHtml(datos, config, templateKey);
-  const width = template.pdf?.width ?? "1240px";
+  // El ancho de pagina se resuelve en componerDatos() (resolverGridCards en
+  // constants.ts), determinista segun la cantidad de tarjetas -- a diferencia
+  // del alto, no necesita medirse despues de renderizar. Si el documento no
+  // expone pdfWidth (no tiene cards-grid), se usa el fijo de la plantilla.
+  const pdfWidthOverride = (datos as { pdfWidth?: number } | null)?.pdfWidth;
+  const width = pdfWidthOverride ? `${pdfWidthOverride}px` : (template.pdf?.width ?? "1240px");
   const height = template.pdf?.height ?? "1050px";
   const viewportWidth = Number.parseInt(width, 10) || 1240;
   const viewportHeight = Number.parseInt(height, 10) || 1050;

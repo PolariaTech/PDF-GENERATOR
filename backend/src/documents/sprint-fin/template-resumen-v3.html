@@ -275,7 +275,7 @@
 
       .cards-grid {
         display: grid;
-        grid-template-columns: repeat(var(--card-count), minmax(0, 1fr));
+        grid-template-columns: repeat(var(--card-columns), minmax(0, 1fr));
         gap: 16px;
       }
       .epic-card {
@@ -705,7 +705,7 @@
       }
     </style>
   </head>
-  <body>
+  <body style="width: {{pdfWidth}}px">
     <div class="page">
       <div class="health-banner">
         <div class="health-badge" style="background:{{saludColor}}">
@@ -818,7 +818,7 @@
       </div>
       {{/if}}
 
-      <div class="cards-grid" style="--card-count: {{members.length}}">
+      <div class="cards-grid" style="--card-columns: {{cardColumns}}">
         {{#each members}}
         <div class="epic-card">
           <div class="epic-card-head">

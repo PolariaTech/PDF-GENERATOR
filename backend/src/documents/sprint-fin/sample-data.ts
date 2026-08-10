@@ -255,6 +255,10 @@ export const sprintFinSampleData: SprintData = {
           ],
         },
       ],
+      personalizacion: [
+        { title: "Ajustar plantilla de factura para cliente Fridem", status: "Done", agregado: false },
+        { title: "Configurar acceso VPN puntual para soporte externo", status: "Done", agregado: true },
+      ],
     },
   ],
   equipo: {
