@@ -296,11 +296,13 @@
         width: 48px;
         height: 48px;
       }
+      /* 5 categorias reales (ver ESTADO_DONUT_CFG en config.ts) -- 3 filas x 2
+         columnas, mismo layout que template-resumen-v2/v3 de sprint-fin. */
       .estado-legend {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
         grid-auto-flow: column;
-        grid-template-rows: repeat(5, auto);
+        grid-template-rows: repeat(3, auto);
         gap: 6px 18px;
         flex: 1;
       }
@@ -555,7 +557,7 @@
           </div>
 
           <div class="stats-box">
-            <div class="stats-title">Por estado</div>
+            <div class="stats-title">Proyecto</div>
             <div class="stats-subtitle">Distribución por estado</div>
             <div class="estado-row">
               <div
@@ -569,6 +571,35 @@
               </div>
               <div class="estado-legend">
                 {{#each this.estadoConteos}}
+                <div class="estado-legend-row">
+                  <span
+                    class="stats-dot"
+                    style="background:{{this.color}}"
+                  ></span>
+                  {{this.label}}<span class="stats-legend-val"
+                    >{{this.valor}}</span
+                  >
+                </div>
+                {{/each}}
+              </div>
+            </div>
+          </div>
+
+          <div class="stats-box">
+            <div class="stats-title">Personalización</div>
+            <div class="stats-subtitle">Distribución por estado</div>
+            <div class="estado-row">
+              <div
+                class="donut donut-sm"
+                style="background:{{this.personalizacion.estadoGradient}}"
+              >
+                <div class="donut-hole donut-hole-sm">
+                  <span class="donut-num">{{this.personalizacion.total}}</span>
+                  <span class="donut-lbl">Total</span>
+                </div>
+              </div>
+              <div class="estado-legend">
+                {{#each this.personalizacion.estadoConteos}}
                 <div class="estado-legend-row">
                   <span
                     class="stats-dot"

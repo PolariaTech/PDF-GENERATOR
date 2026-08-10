@@ -64,6 +64,15 @@ export const SprintInicioSchema = z.object({
           ).min(1),
         }),
       ).min(1),
+      // Trabajo con la label "personalization" de Linear: sin proyecto, asignado
+      // a esta persona. Se arma deterministicamente en n8n (igual que "horas"),
+      // nunca via la IA -- por eso no tiene min(1) ni aparece en el prompt.
+      personalizacion: z.array(
+        z.object({
+          title: z.string().min(1),
+          status: IssueStatusSchema,
+        }),
+      ).optional(),
     }),
   ).min(1),
   equipo: z.object({
@@ -86,16 +95,13 @@ export const SprintInicioSchema = z.object({
 
 export type SprintInicioData = z.infer<typeof SprintInicioSchema>;
 
-// Las 9 categorias de estado estilo Linear que muestra el donut "Por estado" de
-// template-resumen-inicio.html. Mismo set que sprint-fin (Triage/Bloqueado/
-// Duplicado/Backlog quedan en 0 hasta que el esquema los soporte).
+// Solo las 5 categorias que SprintInicioSchema realmente puede producir (ver
+// STATUS_TO_BUCKET) -- Triage/Bloqueado/Duplicado/Backlog quedaban siempre en 0
+// porque el schema no las soporta, mismo criterio que ESTADO_DONUT_KEYS_V3 en
+// sprint-fin/config.ts.
 const ESTADO_DONUT_CFG = [
-  { key: "Triage", label: "Triage", color: "#F54927" },
   { key: "Todo", label: "Todo", color: "#e2e2e2" },
-  { key: "Bloqueado", label: "Bloqueado", color: "#eb5757" },
   { key: "Completado", label: "Completado", color: "#4cb782" },
-  { key: "Duplicado", label: "Duplicado", color: "#95a2b3" },
-  { key: "Backlog", label: "Backlog", color: "#bec2c8" },
   { key: "En progreso", label: "En progreso", color: "#f2c94c" },
   { key: "En revisión", label: "En revisión", color: "#f2994a" },
   { key: "Cancelado", label: "Cancelado", color: "#95a2b3" },
@@ -140,6 +146,16 @@ function construirBloqueHoras(segmentos: { nombre: string; horas: number }[]) {
   };
 }
 
+// La regla de sprintName/dateStart/dateEnd/weekNumber del prompt (justo abajo) es
+// redundante cuando el JSON viene del workflow de n8n: "Consolidar Markdown del
+// Sprint" ya calcula esos 4 valores ANTES de llamar a la IA y los mete como texto
+// plano en el markdown que le manda a /extraer; despues, "Consolidar Payload
+// Final del Sprint" los vuelve a poner con esos mismos valores originales,
+// descartando lo que haya devuelto la IA. No se puede quitar la instruccion del
+// prompt igual: /extraer es un endpoint generico que tambien usa el flujo manual
+// (subir un .md directo desde el frontend, sin pasar por n8n) -- ahi la IA es la
+// UNICA fuente de estos 4 campos, y SprintInicioSchema los exige como string
+// obligatorio. La redundancia es exclusiva del pipeline de n8n, no del schema/prompt.
 export const SPRINT_INICIO_SYSTEM_PROMPT = `Eres un extractor de datos para el resumen de INICIO de un Sprint (planning). Recibes Markdown de un sprint que todavia no ocurrio y debes devolver solo un objeto estructurado para el esquema indicado. Todo el texto narrativo se redacta siempre en futuro o presente proyectivo -- el sprint todavia no ocurre, se esta planificando ("se implementara", "se resolvera", "se trabajara en") -- nunca en pasado.
 
 Reglas:
@@ -156,14 +172,31 @@ Reglas:
 - "horas": un bloque con "segmentos" (array), cada uno con "nombre" y "horas" (numero). Esto es la distribucion de tiempo estimada del equipo, NO se extrae normalmente del documento de issues. Salvo que el documento indique explicitamente otra distribucion, usa siempre estos 3 segmentos por defecto: {"nombre":"Proyectos (3 objetivos)","horas":94.4}, {"nombre":"Reuniones","horas":9.6}, {"nombre":"Incidencias","horas":16}.
 - No agregues datos que no esten en el documento; si un estado no aparece, usa "Todo".`;
 
+// Doughnut "Total + conteo por estado" (donut-hole + estado-legend en la
+// plantilla): calculo compartido entre "Por estado" (issues de proyectos) y
+// "Personalización" (issues sin proyecto por assignee) -- mismo diseño, misma
+// fuente de datos (ESTADO_DONUT_CFG/STATUS_TO_BUCKET), solo cambia el subconjunto
+// de issues que se le pasa.
+function construirDonutEstado(issues: { status: string }[]) {
+  const total = issues.length;
+  const estadoConteos = ESTADO_DONUT_CFG.map((cfg) => ({
+    ...cfg,
+    valor: issues.filter((issue) => STATUS_TO_BUCKET[issue.status] === cfg.key).length,
+  }));
+  return {
+    total,
+    estadoConteos,
+    estadoGradient: construirGradiente(
+      estadoConteos.map((cfg) => ({ color: cfg.color, valor: cfg.valor })),
+      total,
+    ),
+  };
+}
+
 export function componerDatosInicio(datosExtraidos: SprintInicioData) {
   const members = datosExtraidos.members.map((member, indice) => {
     const allIssues = member.projects.flatMap((project) => project.issues);
-    const totalIssues = allIssues.length;
-    const estadoConteos = ESTADO_DONUT_CFG.map((cfg) => ({
-      ...cfg,
-      valor: allIssues.filter((issue) => STATUS_TO_BUCKET[issue.status] === cfg.key).length,
-    }));
+    const { total: totalIssues, estadoConteos, estadoGradient } = construirDonutEstado(allIssues);
     const paleta = asignarPaleta(indice);
 
     return {
@@ -179,10 +212,10 @@ export function componerDatosInicio(datosExtraidos: SprintInicioData) {
       colorBgIcon: paleta.colorBgIcon,
       colorBgBadge: paleta.colorBgBadge,
       estadoConteos,
-      estadoGradient: construirGradiente(
-        estadoConteos.map((cfg) => ({ color: cfg.color, valor: cfg.valor })),
-        totalIssues,
-      ),
+      estadoGradient,
+      // Mismo diseño que "Por estado" (donut + leyenda), pero solo sobre los
+      // issues sin proyecto con label "personalization" de este member.
+      personalizacion: construirDonutEstado(member.personalizacion ?? []),
     };
   });
 

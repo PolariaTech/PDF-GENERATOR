@@ -198,7 +198,17 @@ export async function generarPdf<T>(
       // por defecto del navegador), asi que nunca reporta menos que el alto del
       // viewport aunque el contenido real sea mas chico — eso rompia el achique.
       const contentHeight = await page.evaluate(() => document.body.scrollHeight);
-      const finalHeight = contentHeight;
+      // Colchon minimo antes de pasarle el alto a page.pdf(): un finalHeight EXACTO
+      // (sin margen) puede caer justo en el limite de una pagina para el motor de
+      // impresion de Chromium, que a veces mide el contenido con una fraccion de
+      // pixel de mas que el scrollHeight medido en pantalla. Cuando eso pasa, el
+      // ultimo bloque completo del documento (ej. el footer-row entero, no solo el
+      // pixel de mas) se corre a una "pagina 2" fantasma que pageRanges: "1"
+      // descarta en silencio -- reproducido y confirmado con template-resumen-inicio
+      // al agregar la seccion de personalizacion (contentHeight=880 exacto perdia
+      // el footer completo; +2px ya lo resolvia). 4px es margen de sobra sin crear
+      // espacio en blanco visible.
+      const finalHeight = contentHeight + 4;
 
       // El await de page.pdf() debe resolver ANTES de cerrar el render surface que
       // lo genero (antes era browser.close(), ahora es context.close() porque el

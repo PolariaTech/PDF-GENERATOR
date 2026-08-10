@@ -107,6 +107,11 @@ export const sprintInicioSampleData: SprintInicioData = {
           ],
         },
       ],
+      personalizacion: [
+        { title: "Ajustar plantilla de factura para cliente Fridem", status: "In Progress" },
+        { title: "Configurar acceso VPN puntual para soporte externo", status: "Todo" },
+        { title: "Revisar integración puntual con bodega externa", status: "Done" },
+      ],
     },
   ],
   equipo: {
