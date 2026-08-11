@@ -205,8 +205,8 @@ export const epicaConfig: DocumentConfig<EpicaData> = {
   systemPrompt: EPICA_SYSTEM_PROMPT,
   componerDatos: componerDatosEpica,
   templates: {
-    default: { path: path.join(__dirname, "template.html") },
-    cierre: { path: path.join(__dirname, "template-cierre.html") },
+    default: { path: path.join(__dirname, "template.html"), cardsGrid: true },
+    cierre: { path: path.join(__dirname, "template-cierre.html"), cardsGrid: true },
   },
   defaultTemplate: "default",
 };

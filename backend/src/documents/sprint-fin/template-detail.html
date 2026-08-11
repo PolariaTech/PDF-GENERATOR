@@ -368,6 +368,32 @@
               </div>
             </section>
             {{/each}}
+            {{#if this.personalizacionIssues.length}}
+            <section>
+              <div class="project-title">
+                <i class="ti ti-adjustments"></i>Personalización
+              </div>
+              <div class="issue-list">
+                {{#each this.personalizacionIssues}}
+                <div class="issue-row">
+                  <span class="issue-title">{{this.title}}</span>
+                  <span
+                    class="issue-status"
+                    style="background: {{this.statusBg}}; color: {{this.statusColor}}"
+                  >
+                    <i class="ti {{this.statusIcon}}"></i>{{this.status}}
+                  </span>
+                  <span
+                    class="issue-agregado"
+                    style="background: {{this.agregadoBg}}; color: {{this.agregadoColor}}"
+                  >
+                    <i class="ti {{this.agregadoIcon}}"></i>{{this.agregadoLabel}}
+                  </span>
+                </div>
+                {{/each}}
+              </div>
+            </section>
+            {{/if}}
           </div>
         </article>
         {{/each}}

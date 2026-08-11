@@ -498,6 +498,24 @@ export function componerDatosSprint(datosExtraidos: SprintData) {
     const horasMiembro = member.horas
       ? construirBloqueHoras(member.horas.segmentos)
       : undefined;
+    // Lista cruda de issues de personalizacion ya estilizada (mismo patron que
+    // los issues de proyecto, sin type/priority porque personalizacion no los
+    // tiene) -- solo la usa template-detail.html, que necesita una lista de
+    // issues y no el donut agregado de mas abajo. Vacia si el miembro no tiene
+    // personalizacion (el template no debe mostrar la seccion en ese caso).
+    const personalizacionIssues = (member.personalizacion ?? []).map((issue) => {
+      const agregadoTag = issue.agregado ? AGREGADO_TAG_CFG.true : AGREGADO_TAG_CFG.false;
+      return {
+        ...issue,
+        statusColor: STA_CFG[issue.status].color,
+        statusBg: STA_CFG[issue.status].bg,
+        statusIcon: STA_CFG[issue.status].icon,
+        agregadoLabel: agregadoTag.label,
+        agregadoColor: agregadoTag.color,
+        agregadoBg: agregadoTag.bg,
+        agregadoIcon: agregadoTag.icon,
+      };
+    });
 
     return {
       ...member,
@@ -510,6 +528,7 @@ export function componerDatosSprint(datosExtraidos: SprintData) {
       projects,
       vencidos,
       horas: horasMiembro,
+      personalizacionIssues,
       // Mismo diseño que la caja de proyecto (Planeados/Agregados + Resultado),
       // pero solo sobre los issues sin proyecto con label "personalization" de
       // este member -- sección propia, separada de la de proyecto.
@@ -727,14 +746,17 @@ export const sprintFinConfig: DocumentConfig<SprintData> = {
     resumen: {
       path: path.join(__dirname, "template-resumen.html"),
       pdf: { width: "1240px", height: "1050px" },
+      cardsGrid: true,
     },
     "resumen-v2": {
       path: path.join(__dirname, "template-resumen-v2.html"),
       pdf: { width: "1240px", height: "1050px" },
+      cardsGrid: true,
     },
     "resumen-v3": {
       path: path.join(__dirname, "template-resumen-v3.html"),
       pdf: { width: "1240px", height: "1050px" },
+      cardsGrid: true,
     },
   },
   defaultTemplate: "detail",

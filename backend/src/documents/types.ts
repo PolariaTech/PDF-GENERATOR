@@ -6,6 +6,14 @@ export interface DocumentTemplate {
     width: string;
     height: string;
   };
+  // Marca las plantillas que usan cards-grid (--card-columns / {{pdfWidth}} en
+  // el <body>, ver ADR-0009). generarPdf() solo aplica el pdfWidth calculado
+  // por resolverGridCards() en componerDatos() cuando esta plantilla lo pide
+  // -- sin esto, un docType con templates mixtas (ej. sprint-fin: detail NO es
+  // cards-grid pero resumen/resumen-v2/resumen-v3 SI) terminaba forzando el
+  // ancho de grid tambien en la plantilla fija (bug real: detail se generaba
+  // con 1240px en vez de sus 900px declarados, dejando espacio en blanco).
+  cardsGrid?: boolean;
 }
 
 export interface DocumentConfig<T> {

@@ -250,6 +250,7 @@ export const sprintInicioConfig: DocumentConfig<SprintInicioData> = {
     "resumen-inicio": {
       path: path.join(__dirname, "template-resumen-inicio.html"),
       pdf: { width: "1240px", height: "1050px" },
+      cardsGrid: true,
     },
   },
   defaultTemplate: "resumen-inicio",

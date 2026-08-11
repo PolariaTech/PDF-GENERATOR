@@ -227,14 +227,19 @@ export function construirGradiente(
 
 // Compara los headings "### <NOMBRE>" del markdown fuente (uno por miembro,
 // bajo "## Trabajo por miembro" -- ver Consolidar Markdown del Sprint en n8n)
-// contra los members que la IA realmente devolvio, para detectar miembros
-// omitidos que Zod no puede atrapar (un array mas corto sigue siendo un schema
-// valido). Confirmado en produccion 2026-08-11: con markdown de 3 miembros
-// (~17K tokens de entrada), gpt-4o-mini devolvio solo 1-2 -- casi siempre
-// omitiendo al ultimo/mas denso -- sin ningun error, y "equipo.quien" en la
-// misma respuesta sí enumeraba a los 3, confirmando que el modelo "sabia" que
-// existian pero no los incluyo en el array. Compartido entre sprint-inicio y
-// sprint-fin (unicos dos documentos con "### <miembro>" en su markdown).
+// contra los members que la IA realmente devolvio, para detectar tanto
+// miembros omitidos como duplicados que Zod no puede atrapar (un array con
+// menos o mas entradas de las esperadas sigue siendo un schema valido).
+// Confirmado en produccion 2026-08-11: con markdown de 3 miembros (~17K
+// tokens de entrada), gpt-4o-mini devolvio solo 1-2 -- casi siempre omitiendo
+// al ultimo/mas denso -- sin ningun error, y "equipo.quien" en la misma
+// respuesta sí enumeraba a los 3, confirmando que el modelo "sabia" que
+// existian pero no los incluyo en el array. El mismo dia, ya con
+// gpt-5.4-mini, se vio el caso inverso en otra ejecucion: devolvio 4 members
+// con uno duplicado exacto (mismo nombre, mismo contenido) -- de ahi que este
+// chequeo tambien valide duplicados, no solo faltantes. Compartido entre
+// sprint-inicio y sprint-fin (unicos dos documentos con "### <miembro>" en su
+// markdown).
 export function verificarMiembrosCompletos(
   markdown: string,
   members: { name: string }[],
@@ -244,11 +249,25 @@ export function verificarMiembrosCompletos(
   );
   if (nombresEsperados.length === 0) return null;
 
-  const nombresExtraidos = new Set(members.map((m) => m.name.trim().toLowerCase()));
+  const nombresExtraidosLista = members.map((m) => m.name.trim().toLowerCase());
+  const nombresExtraidos = new Set(nombresExtraidosLista);
   const faltantes = nombresEsperados.filter(
     (nombre) => !nombresExtraidos.has(nombre.toLowerCase()),
   );
-  if (faltantes.length === 0) return null;
+  if (faltantes.length > 0) {
+    return `El documento fuente tiene ${nombresEsperados.length} miembros (${nombresEsperados.join(", ")}) pero tu respuesta solo incluyo ${members.length}. Faltan por completo: ${faltantes.join(", ")}. Debes incluir a TODOS los miembros mencionados en el documento bajo "## Trabajo por miembro", con su objetivo/desviaciones/issues completos -- ninguno puede quedar omitido.`;
+  }
 
-  return `El documento fuente tiene ${nombresEsperados.length} miembros (${nombresEsperados.join(", ")}) pero tu respuesta solo incluyo ${members.length}. Faltan por completo: ${faltantes.join(", ")}. Debes incluir a TODOS los miembros mencionados en el documento bajo "## Trabajo por miembro", con su objetivo/desviaciones/issues completos -- ninguno puede quedar omitido.`;
+  const conteo = new Map<string, number>();
+  for (const nombre of nombresExtraidosLista) {
+    conteo.set(nombre, (conteo.get(nombre) ?? 0) + 1);
+  }
+  const duplicados = Array.from(conteo.entries())
+    .filter(([, veces]) => veces > 1)
+    .map(([nombre]) => nombre);
+  if (duplicados.length > 0) {
+    return `Tu respuesta incluyo a ${duplicados.join(", ")} repetido(s) mas de una vez en "members". El documento fuente tiene exactamente ${nombresEsperados.length} miembros (${nombresEsperados.join(", ")}), cada uno debe aparecer UNA sola vez en el array "members" -- elimina la entrada duplicada.`;
+  }
+
+  return null;
 }

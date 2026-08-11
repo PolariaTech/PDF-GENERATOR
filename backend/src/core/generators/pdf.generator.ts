@@ -170,9 +170,16 @@ export async function generarPdf<T>(
   const html = generarHtml(datos, config, templateKey);
   // El ancho de pagina se resuelve en componerDatos() (resolverGridCards en
   // constants.ts), determinista segun la cantidad de tarjetas -- a diferencia
-  // del alto, no necesita medirse despues de renderizar. Si el documento no
-  // expone pdfWidth (no tiene cards-grid), se usa el fijo de la plantilla.
-  const pdfWidthOverride = (datos as { pdfWidth?: number } | null)?.pdfWidth;
+  // del alto, no necesita medirse despues de renderizar. Solo se aplica si la
+  // plantilla RESUELTA usa cards-grid (template.cardsGrid) -- un docType como
+  // sprint-fin tiene templates mixtas (detail es una lista de ancho fijo, sin
+  // cards-grid) y componerDatos() calcula pdfWidth de forma incondicional para
+  // todo el documento, sin saber que plantilla se va a usar. Sin este chequeo,
+  // detail terminaba renderizando a 1240px en vez de sus 900px declarados,
+  // dejando espacio en blanco (bug real, ver incidente 2026-08-11).
+  const pdfWidthOverride = template.cardsGrid
+    ? (datos as { pdfWidth?: number } | null)?.pdfWidth
+    : undefined;
   const width = pdfWidthOverride ? `${pdfWidthOverride}px` : (template.pdf?.width ?? "1240px");
   const height = template.pdf?.height ?? "1050px";
   const viewportWidth = Number.parseInt(width, 10) || 1240;
