@@ -51,19 +51,22 @@ type IntentoExtraccion<T> =
   | { exito: true; datos: T; uso: UsoTokens }
   | { exito: false; motivo: string; uso: UsoTokens };
 
-function calcularUso(completion: OpenAI.Chat.Completions.ChatCompletion): UsoTokens {
+function calcularUso(
+  completion: OpenAI.Chat.Completions.ChatCompletion,
+  precioModelo: { modelo: string; usdPorMillonEntrada: number; usdPorMillonSalida: number },
+): UsoTokens {
   const tokensEntrada = completion.usage?.prompt_tokens ?? 0;
   const tokensSalida = completion.usage?.completion_tokens ?? 0;
   const tokensTotal = completion.usage?.total_tokens ?? tokensEntrada + tokensSalida;
 
   return {
-    modelo: PRECIO_GPT4OMINI.modelo,
+    modelo: precioModelo.modelo,
     tokensEntrada,
     tokensSalida,
     tokensTotal,
     costoEstimadoUsd:
-      (tokensEntrada / 1_000_000) * PRECIO_GPT4OMINI.usdPorMillonEntrada +
-      (tokensSalida / 1_000_000) * PRECIO_GPT4OMINI.usdPorMillonSalida,
+      (tokensEntrada / 1_000_000) * precioModelo.usdPorMillonEntrada +
+      (tokensSalida / 1_000_000) * precioModelo.usdPorMillonSalida,
   };
 }
 
@@ -91,8 +94,9 @@ async function intentarExtraer<T>(
   mensajeUsuario: string,
   config: DocumentConfig<T>,
 ): Promise<IntentoExtraccion<T>> {
+  const precioModelo = config.precioModelo ?? PRECIO_GPT4OMINI;
   const completion = await openai.beta.chat.completions.parse({
-    model: PRECIO_GPT4OMINI.modelo,
+    model: precioModelo.modelo,
     temperature: 0.2,
     response_format: zodResponseFormat(config.schema, `${config.id}_schema`),
     messages: [
@@ -101,7 +105,7 @@ async function intentarExtraer<T>(
     ],
   });
 
-  const uso = calcularUso(completion);
+  const uso = calcularUso(completion, precioModelo);
   const parsed = completion.choices[0]?.message?.parsed;
   if (!parsed) {
     return { exito: false, motivo: "OpenAI no devolvio datos parseados.", uso };
@@ -134,10 +138,15 @@ export async function extraer<T>(
     usos.push(resultado.uso);
 
     if (resultado.exito) {
-      return { datos: resultado.datos, uso: sumarUso(usos) };
+      const motivoIncompleto = config.verificarCompletitud?.(markdown, resultado.datos);
+      if (!motivoIncompleto) {
+        return { datos: resultado.datos, uso: sumarUso(usos) };
+      }
+      ultimoMotivo = motivoIncompleto;
+    } else {
+      ultimoMotivo = resultado.motivo;
     }
 
-    ultimoMotivo = resultado.motivo;
     mensajeUsuario = `${markdown}\n\n[NOTA DEL SISTEMA -- intento ${intento} fallo la validacion, corrige exactamente esto en tu proxima respuesta: ${ultimoMotivo}]`;
   }
 

@@ -1,6 +1,13 @@
 import path from "path";
 import { z } from "zod";
-import { asignarPaleta, construirGradiente, formatearHoras, resolverGridCards } from "../../constants";
+import {
+  PRECIO_GPT54MINI,
+  asignarPaleta,
+  construirGradiente,
+  formatearHoras,
+  resolverGridCards,
+  verificarMiembrosCompletos,
+} from "../../constants";
 import { DocumentConfig } from "../types";
 import { leerHistorico } from "./historico";
 
@@ -709,6 +716,8 @@ export const sprintFinConfig: DocumentConfig<SprintData> = {
   schema: SprintSchema,
   systemPrompt: SPRINT_SYSTEM_PROMPT,
   componerDatos: componerDatosSprint,
+  precioModelo: PRECIO_GPT54MINI,
+  verificarCompletitud: (markdown, datos) => verificarMiembrosCompletos(markdown, datos.members),
   templates: {
     detail: {
       path: path.join(__dirname, "template-detail.html"),

@@ -1,6 +1,13 @@
 import path from "path";
 import { z } from "zod";
-import { asignarPaleta, construirGradiente, formatearHoras, resolverGridCards } from "../../constants";
+import {
+  PRECIO_GPT54MINI,
+  asignarPaleta,
+  construirGradiente,
+  formatearHoras,
+  resolverGridCards,
+  verificarMiembrosCompletos,
+} from "../../constants";
 import { DocumentConfig } from "../types";
 
 // Schema deliberadamente minimo: solo los campos que template-resumen-inicio.html
@@ -236,6 +243,8 @@ export const sprintInicioConfig: DocumentConfig<SprintInicioData> = {
   schema: SprintInicioSchema,
   systemPrompt: SPRINT_INICIO_SYSTEM_PROMPT,
   componerDatos: componerDatosInicio,
+  precioModelo: PRECIO_GPT54MINI,
+  verificarCompletitud: (markdown, datos) => verificarMiembrosCompletos(markdown, datos.members),
   templates: {
     "resumen-inicio": {
       path: path.join(__dirname, "template-resumen-inicio.html"),

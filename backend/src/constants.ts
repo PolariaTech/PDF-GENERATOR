@@ -21,6 +21,20 @@ export const PRECIO_GPT4OMINI = {
   usdPorMillonSalida: 0.6,
 };
 
+// gpt-5.4-mini: usado por sprint-fin/sprint-inicio (config.ts, campo
+// precioModelo) en vez de PRECIO_GPT4OMINI. Confirmado el 2026-08-11: con
+// varios miembros por sprint, cada uno con varios campos de texto a rango de
+// caracteres exacto, gpt-4o-mini devolvia "finish_reason: stop" con solo 1 de
+// 3 miembros -- no era un corte por limite de tokens, el modelo "creia" que
+// esa respuesta parcial ya estaba completa. gpt-5.4-mini (y gpt-4o) resuelven
+// los 3 miembros de forma consistente en el mismo intento. epica sigue en
+// PRECIO_GPT4OMINI (menos miembros por documento, no reprodujo el problema).
+export const PRECIO_GPT54MINI = {
+  modelo: "gpt-5.4-mini",
+  usdPorMillonEntrada: 0.75,
+  usdPorMillonSalida: 4.5,
+};
+
 // Bloque de horas FIJO, en base MENSUAL (4 semanas). No se extrae del .md,
 // no cambia mes a mes. Si el equipo cambia su distribucion de tiempo, se
 // edita aqui una sola vez (mantener el total y cada "horas" en base mensual).
@@ -209,4 +223,32 @@ export function construirGradiente(
       return `${seg.color} ${inicio}% ${fin}%`;
     });
   return `conic-gradient(${partes.join(", ")})`;
+}
+
+// Compara los headings "### <NOMBRE>" del markdown fuente (uno por miembro,
+// bajo "## Trabajo por miembro" -- ver Consolidar Markdown del Sprint en n8n)
+// contra los members que la IA realmente devolvio, para detectar miembros
+// omitidos que Zod no puede atrapar (un array mas corto sigue siendo un schema
+// valido). Confirmado en produccion 2026-08-11: con markdown de 3 miembros
+// (~17K tokens de entrada), gpt-4o-mini devolvio solo 1-2 -- casi siempre
+// omitiendo al ultimo/mas denso -- sin ningun error, y "equipo.quien" en la
+// misma respuesta sí enumeraba a los 3, confirmando que el modelo "sabia" que
+// existian pero no los incluyo en el array. Compartido entre sprint-inicio y
+// sprint-fin (unicos dos documentos con "### <miembro>" en su markdown).
+export function verificarMiembrosCompletos(
+  markdown: string,
+  members: { name: string }[],
+): string | null {
+  const nombresEsperados = Array.from(markdown.matchAll(/^### (.+)$/gm)).map((m) =>
+    m[1].trim(),
+  );
+  if (nombresEsperados.length === 0) return null;
+
+  const nombresExtraidos = new Set(members.map((m) => m.name.trim().toLowerCase()));
+  const faltantes = nombresEsperados.filter(
+    (nombre) => !nombresExtraidos.has(nombre.toLowerCase()),
+  );
+  if (faltantes.length === 0) return null;
+
+  return `El documento fuente tiene ${nombresEsperados.length} miembros (${nombresEsperados.join(", ")}) pero tu respuesta solo incluyo ${members.length}. Faltan por completo: ${faltantes.join(", ")}. Debes incluir a TODOS los miembros mencionados en el documento bajo "## Trabajo por miembro", con su objetivo/desviaciones/issues completos -- ninguno puede quedar omitido.`;
 }
