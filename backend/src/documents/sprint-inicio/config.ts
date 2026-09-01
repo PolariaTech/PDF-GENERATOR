@@ -36,6 +36,32 @@ export const IssueStatusSchema = z.enum([
 // uno de 900), no exige perfeccion. Ver extractor.service.ts: si el LLM cae
 // fuera de este margen, se reintenta hasta 3 veces con el motivo exacto antes
 // de fallar la extraccion.
+//
+// Extraidos como sub-schemas nombrados (en vez de quedar inline dentro de
+// SprintInicioSchema) para que narrativa.ts pueda reusarlos tal cual en el
+// schema de salida de POST /api/sprint-inicio/narrativa, sin repetir estos
+// mismos numeros por tercera vez (ya estan duplicados una vez en el prompt
+// hardcodeado que hoy vive en el workflow de n8n).
+export const objetivoSchema = z.string().min(450).max(520);
+
+export const equipoSchema = z.object({
+  // Prompt pide 60-90 -- margen -30/+20.
+  quien: z.string().min(30).max(110),
+  // Prompt pide 30-50 -- margen -20/+20 (el piso de -30 daria 0, sin sentido).
+  cuando: z.string().min(10).max(70),
+  // Prompt pide 50-80 -- margen -30/+20.
+  donde: z.string().min(20).max(100),
+  // Prompt pide 40-70 -- margen -30/+20.
+  como: z.string().min(10).max(90),
+});
+
+export const riesgoTransversalSchema = z.object({
+  // Prompt pide 180-230 -- margen -30/+20.
+  texto: z.string().min(150).max(250),
+  // Prompt pide 100-140 -- margen -30/+20.
+  mitigacion: z.string().min(70).max(160),
+});
+
 export const SprintInicioSchema = z.object({
   sprintName: z
     .string()
@@ -58,8 +84,7 @@ export const SprintInicioSchema = z.object({
       // 2 letras mayusculas (primer nombre, primer apellido) -- mismo formato
       // que ya exige sprint-fin, ver regla en SPRINT_INICIO_SYSTEM_PROMPT.
       initials: z.string().regex(/^[A-Z]{2}$/, "initials debe ser exactamente 2 letras mayúsculas"),
-      // Prompt pide EXACTAMENTE 480-500 -- margen de tolerancia -30/+20.
-      objetivo: z.string().min(450).max(520),
+      objetivo: objetivoSchema,
       projects: z.array(
         z.object({
           name: z.string(),
@@ -82,22 +107,8 @@ export const SprintInicioSchema = z.object({
       ).optional(),
     }),
   ).min(1),
-  equipo: z.object({
-    // Prompt pide 60-90 -- margen -30/+20.
-    quien: z.string().min(30).max(110),
-    // Prompt pide 30-50 -- margen -20/+20 (el piso de -30 daria 0, sin sentido).
-    cuando: z.string().min(10).max(70),
-    // Prompt pide 50-80 -- margen -30/+20.
-    donde: z.string().min(20).max(100),
-    // Prompt pide 40-70 -- margen -30/+20.
-    como: z.string().min(10).max(90),
-  }),
-  riesgoTransversal: z.object({
-    // Prompt pide 180-230 -- margen -30/+20.
-    texto: z.string().min(150).max(250),
-    // Prompt pide 100-140 -- margen -30/+20.
-    mitigacion: z.string().min(70).max(160),
-  }),
+  equipo: equipoSchema,
+  riesgoTransversal: riesgoTransversalSchema,
 });
 
 export type SprintInicioData = z.infer<typeof SprintInicioSchema>;

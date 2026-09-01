@@ -4,6 +4,16 @@ import { ZodError } from "zod";
 import { DocumentConfig } from "../../documents/types";
 import { PRECIO_GPT4OMINI } from "../../constants";
 
+// Subconjunto de DocumentConfig<T> que esta funcion realmente usa. Permite que
+// un endpoint que no renderiza nada (ej. sprint-inicio/narrativa.ts, que solo
+// le pide a la IA 3 campos sueltos) reutilice extraer() sin tener que inventar
+// un `templates`/`componerDatos` vacio solo para satisfacer el tipo -- todo
+// DocumentConfig<T> real sigue siendo asignable aca tal cual (superset).
+type ConfigExtraccion<T> = Pick<
+  DocumentConfig<T>,
+  "id" | "schema" | "systemPrompt" | "precioModelo" | "verificarCompletitud"
+>;
+
 // timeout/maxRetries: evita que un request colgado bloquee el handler Express
 // indefinidamente (esto lo invoca tambien un workflow de n8n que necesita
 // comportamiento predecible). El SDK oficial `openai` (v4.104.0, ver
@@ -92,7 +102,7 @@ function resumirErroresZod(error: ZodError): string {
 
 async function intentarExtraer<T>(
   mensajeUsuario: string,
-  config: DocumentConfig<T>,
+  config: ConfigExtraccion<T>,
 ): Promise<IntentoExtraccion<T>> {
   const precioModelo = config.precioModelo ?? PRECIO_GPT4OMINI;
   const completion = await openai.beta.chat.completions.parse({
@@ -127,7 +137,7 @@ async function intentarExtraer<T>(
 
 export async function extraer<T>(
   markdown: string,
-  config: DocumentConfig<T>,
+  config: ConfigExtraccion<T>,
 ): Promise<ResultadoExtraccion<T>> {
   const usos: UsoTokens[] = [];
   let mensajeUsuario = markdown;
