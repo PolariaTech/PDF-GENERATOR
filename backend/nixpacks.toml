@@ -1,0 +1,13 @@
+# Nixpacks (builder de Railway) detecta "playwright" en package.json y agrega
+# automaticamente su propia lista hardcodeada de paquetes apt para Chromium en
+# la fase "setup" -- esa lista quedo desactualizada para Debian trixie
+# (paquete "libllvm15" ya no existe con ese nombre ahi, rompiendo el build con
+# "E: Unable to locate package libllvm15"). En vez de mantener a mano una
+# lista de paquetes apt equivalente para trixie (fragil, se puede volver a
+# romper con la proxima release de Debian), se vacia la lista automatica de
+# Nixpacks y se delega la instalacion de dependencias de sistema a Playwright
+# mismo via "playwright install --with-deps chromium" (ver postinstall en
+# package.json) -- Playwright mantiene activamente su propia deteccion de SO,
+# a diferencia de la lista estatica de Nixpacks.
+[phases.setup]
+aptPkgs = []

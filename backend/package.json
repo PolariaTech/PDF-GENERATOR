@@ -7,7 +7,7 @@
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "postinstall": "playwright install chromium"
+    "postinstall": "playwright install --with-deps chromium"
   },
   "dependencies": {
     "cors": "^2.8.5",
