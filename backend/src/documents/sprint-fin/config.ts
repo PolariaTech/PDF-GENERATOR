@@ -11,21 +11,6 @@ import {
 import { DocumentConfig } from "../types";
 import { leerHistorico } from "./historico";
 
-// Total de horas de una persona en una semana: siempre 8h x dias habiles, y
-// TODOS los miembros del sprint deben sumar exactamente el mismo total. Solo
-// un festivo en la semana lo baja de 40 (5 dias) a 32 (4 dias); ese calculo ya
-// lo resuelve n8n desde el Sheet antes de armar el JSON -- aqui solo
-// validamos que lo que llegue sea uno de estos dos valores, igual para todos
-// (ver superRefine en SprintSchema).
-const CAPACIDADES_VALIDAS_HORAS_MIEMBRO = [40, 32] as const;
-const TOLERANCIA_HORAS = 0.01;
-
-function esCapacidadValida(total: number): boolean {
-  return CAPACIDADES_VALIDAS_HORAS_MIEMBRO.some(
-    (capacidad) => Math.abs(total - capacidad) < TOLERANCIA_HORAS,
-  );
-}
-
 export const IssueTypeSchema = z.enum(["Bug", "Feature", "Improvement"]);
 export const IssuePrioritySchema = z.enum(["Urgent", "High", "Medium", "Low"]);
 export const IssueStatusSchema = z.enum([
@@ -114,9 +99,13 @@ export const SprintSchema = z.object({
       // por integracion (ver SPRINT_SYSTEM_PROMPT). Sin este dato, la tarjeta
       // simplemente no muestra la seccion de horas para ese miembro. La suma de
       // todos los segmentos (Proyectos + Reuniones + Incidencias + cualquier
-      // otro) debe dar exactamente 40 u 32, y TODOS los miembros deben coincidir
-      // en el mismo total -- se valida en el superRefine de SprintSchema, no
-      // aqui, porque requiere comparar entre members.
+      // otro) tiene que ser la MISMA para todos los miembros del sprint (todos
+      // trabajan sobre la misma cantidad de dias) -- se valida en el
+      // superRefine de SprintSchema, no aqui, porque requiere comparar entre
+      // members. No se exige un total fijo (40/32): "Dias Trabajados" en el
+      // Sheet es un override manual para sprints que no duran 1 semana
+      // estandar (ej. 2 semanas con 6 dias documentados = 48h), asi que el
+      // total valido varia segun el sprint, no es siempre 40 u 32.
       horas: z
         .object({
           segmentos: z.array(crearHorasSegmentoSchema()).min(1),
@@ -156,6 +145,11 @@ export const SprintSchema = z.object({
   // Editable a mano. Mismo patron que epica (ver epica/config.ts).
   riesgoTransversalResultado: riesgoTransversalResultadoSchema.nullable().optional(),
 }).superRefine((datos, ctx) => {
+  // Todos los miembros del sprint trabajan sobre la misma cantidad de dias,
+  // asi que sus horas totales tienen que coincidir entre si -- pero no contra
+  // un numero fijo (40/32): "Dias Trabajados" en el Sheet es un override
+  // manual para sprints que no duran 1 semana estandar, asi que el total
+  // valido depende del sprint (ej. 48h para un sprint de 2 semanas).
   const totalesPorMiembro = datos.members
     .map((member, indice) => ({
       indice,
@@ -167,16 +161,6 @@ export const SprintSchema = z.object({
 
   if (totalesPorMiembro.length === 0) return;
 
-  for (const { indice, total } of totalesPorMiembro) {
-    if (!esCapacidadValida(total)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["members", indice, "horas"],
-        message: `Las horas totales de este miembro deben sumar exactamente 40 (semana normal) o 32 (semana con festivo); suman ${total}.`,
-      });
-    }
-  }
-
   const totalesDistintos = new Set(
     totalesPorMiembro.map(({ total }) => Math.round(total * 100) / 100),
   );
@@ -185,7 +169,7 @@ export const SprintSchema = z.object({
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["members", indice, "horas"],
-        message: `Todos los miembros deben sumar el mismo total de horas (40 u 32); hay valores distintos entre members: ${[...totalesDistintos].join(", ")}.`,
+        message: `Todos los miembros deben sumar el mismo total de horas; hay valores distintos entre members: ${[...totalesDistintos].join(", ")}.`,
       });
     }
   }
