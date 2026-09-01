@@ -393,6 +393,46 @@ function aTituloCase(texto: string): string {
     .join(" ");
 }
 
+// El bloque "horas" del documento (equipo completo) tiene que ser la SUMA de
+// las horas individuales de cada miembro por segmento, nunca un calculo
+// aparte -- si los 3 miembros tuvieron 1.5h de Reuniones, el total del equipo
+// es 4.5h (1.5+1.5+1.5), no un numero distinto calculado por su cuenta. Antes
+// "horas" del documento y "horas" de cada member salian de dos calculos
+// independientes en n8n (uno para el equipo, otro por persona) que podian
+// dar resultados que no cuadraban entre si. Suma por nombre de segmento
+// (mismo orden que el primer member que trae ese segmento) para tolerar que
+// no todos los members tengan exactamente los mismos segmentos.
+function sumarSegmentosPorMiembro(
+  miembros: { horas?: { segmentos: { nombre: string; horas: number; horasPlaneadas?: number | null }[] } | null }[],
+) {
+  const acumulado = new Map<string, { horas: number; horasPlaneadas: number; tieneHorasPlaneadas: boolean }>();
+  const orden: string[] = [];
+
+  for (const miembro of miembros) {
+    for (const segmento of miembro.horas?.segmentos ?? []) {
+      if (!acumulado.has(segmento.nombre)) {
+        acumulado.set(segmento.nombre, { horas: 0, horasPlaneadas: 0, tieneHorasPlaneadas: false });
+        orden.push(segmento.nombre);
+      }
+      const entrada = acumulado.get(segmento.nombre)!;
+      entrada.horas = Math.round((entrada.horas + segmento.horas) * 10) / 10;
+      if (segmento.horasPlaneadas != null) {
+        entrada.horasPlaneadas = Math.round((entrada.horasPlaneadas + segmento.horasPlaneadas) * 10) / 10;
+        entrada.tieneHorasPlaneadas = true;
+      }
+    }
+  }
+
+  return orden.map((nombre) => {
+    const entrada = acumulado.get(nombre)!;
+    return {
+      nombre,
+      horas: entrada.horas,
+      horasPlaneadas: entrada.tieneHorasPlaneadas ? entrada.horasPlaneadas : null,
+    };
+  });
+}
+
 // Compone un bloque "horas" (total formateado, segmentos con pct/color, y el
 // KPI de horas reales/planeadas del segmento "Proyectos") -- reusado tanto
 // para el bloque del documento como para el de cada member (ver SprintSchema).
@@ -581,9 +621,17 @@ export function componerDatosSprint(datosExtraidos: SprintData) {
     };
   });
 
-  // Bloque de horas del documento (equipo completo); incluye el KPI de horas
-  // reales/planeadas del segmento "Proyectos" si el documento trae horasPlaneadas.
-  const horas = construirBloqueHoras(datosExtraidos.horas.segmentos);
+  // Bloque de horas del documento (equipo completo): suma de las horas de
+  // cada member si al menos uno las trae (caso normal en produccion); si
+  // ningun member trae "horas" (campo opcional), cae al bloque del documento
+  // tal como llega en datosExtraidos. Incluye el KPI de horas reales/
+  // planeadas del segmento "Proyectos" si hay horasPlaneadas disponibles.
+  const miembrosConHoras = datosExtraidos.members.filter((member) => member.horas);
+  const segmentosDocumento =
+    miembrosConHoras.length > 0
+      ? sumarSegmentosPorMiembro(miembrosConHoras)
+      : datosExtraidos.horas.segmentos;
+  const horas = construirBloqueHoras(segmentosDocumento);
 
   // KPIs a nivel documento para template-resumen-v2: dos porcentajes/estados
   // independientes calculados sobre todos los issues del sprint segun `agregado`.
