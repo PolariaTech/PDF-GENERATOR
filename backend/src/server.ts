@@ -5,6 +5,7 @@ import multer from "multer";
 import path from "path";
 import { documentRouter, sendError, apiKeyAuth } from "./api/document.routes";
 import { sprintHistoricoRouter } from "./documents/sprint-fin/historico.routes";
+import { sprintFinNarrativaRouter } from "./documents/sprint-fin/narrativa.routes";
 import { sprintInicioNarrativaRouter } from "./documents/sprint-inicio/narrativa.routes";
 import { closeBrowser } from "./core/generators/pdf.generator";
 
@@ -62,6 +63,7 @@ app.use(express.json({ limit: "2mb" }));
 app.use("/api", apiKeyAuth);
 app.use("/api/:docType/extraer", upload.single("archivo"));
 app.use("/api", sprintHistoricoRouter);
+app.use("/api", sprintFinNarrativaRouter);
 app.use("/api", sprintInicioNarrativaRouter);
 app.use("/api", documentRouter);
 app.get("/.well-known/appspecific/com.chrome.devtools.json", (_req, res) => {

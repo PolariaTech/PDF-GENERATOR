@@ -57,6 +57,38 @@ function crearHorasSegmentoSchema() {
   });
 }
 
+// Sub-schemas nombrados (en vez de quedar inline dentro de SprintSchema) para
+// que narrativa.ts pueda reusarlos tal cual en el schema de salida de
+// POST /api/sprint-fin/narrativa, sin repetir estos numeros una tercera vez.
+// A diferencia de sprint-inicio, estos NO llevan margen de tolerancia (solo
+// max(), sin min()) -- ese endurecimiento sigue sin aplicarse a sprint-fin
+// (ver Caso borde A en docs/BUSINESS_FLOWS.md), fuera de alcance de este
+// refactor: es puramente extraer lo que ya existia, sin cambiar tolerancias.
+export const objetivoSchema = z.string().max(600);
+
+export const desviacionesSchema = z.object({
+  logrado: z.string().max(320),
+  motivo: z.string().max(200),
+});
+
+export const equipoSchema = z.object({
+  quien: z.string().max(150),
+  cuando: z.string().max(150),
+  donde: z.string().max(150),
+  como: z.string().max(150),
+});
+
+export const riesgoTransversalSchema = z.object({
+  texto: z.string().max(320),
+  mitigacion: z.string().max(200),
+});
+
+// Base sin .nullable().optional() para que narrativa.ts pueda reusarla como
+// campo requerido (ese endpoint es exclusivo de cierre, tiempoVerbal siempre
+// "Pasado" -- a diferencia de SprintSchema, que via /extraer generico tambien
+// soporta documentos "Futuro" donde este campo no aplica).
+export const riesgoTransversalResultadoSchema = z.string().max(260);
+
 export const SprintSchema = z.object({
   sprintName: z.string().toUpperCase(),
   dateStart: z.string(),
@@ -71,15 +103,12 @@ export const SprintSchema = z.object({
     z.object({
       name: z.string(),
       initials: z.string(),
-      objetivo: z.string().max(600),
+      objetivo: objetivoSchema,
       // Reemplaza al riesgo transversal en el resumen final (template-resumen-v2):
       // en un sprint cerrado el riesgo ya no aplica, se explican las desviaciones
       // de alcance de ESTE miembro (planeado vs. realmente hecho por el/ella).
       // Ver daily 2026-07-07 (Edgar) y decision de moverlo a nivel de miembro (2026-07-17).
-      desviaciones: z.object({
-        logrado: z.string().max(320),
-        motivo: z.string().max(200),
-      }),
+      desviaciones: desviacionesSchema,
       // Horas individuales de esta persona, mismo shape que el bloque "horas"
       // del documento. Opcional: no lo llena la IA, se agrega despues a mano o
       // por integracion (ver SPRINT_SYSTEM_PROMPT). Sin este dato, la tarjeta
@@ -120,20 +149,12 @@ export const SprintSchema = z.object({
       ).optional(),
     }),
   ).min(1),
-  equipo: z.object({
-    quien: z.string().max(150),
-    cuando: z.string().max(150),
-    donde: z.string().max(150),
-    como: z.string().max(150),
-  }),
-  riesgoTransversal: z.object({
-    texto: z.string().max(320),
-    mitigacion: z.string().max(200),
-  }),
+  equipo: equipoSchema,
+  riesgoTransversal: riesgoTransversalSchema,
   // Solo se llena en el flujo de CIERRE (template-resumen-v2): si el riesgo
   // transversal previsto en resumen-inicio se materializo o no, y que paso.
   // Editable a mano. Mismo patron que epica (ver epica/config.ts).
-  riesgoTransversalResultado: z.string().max(260).nullable().optional(),
+  riesgoTransversalResultado: riesgoTransversalResultadoSchema.nullable().optional(),
 }).superRefine((datos, ctx) => {
   const totalesPorMiembro = datos.members
     .map((member, indice) => ({
